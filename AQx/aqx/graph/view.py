@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import copy
+import json
 from typing import Dict, Optional
 
-from PySide6.QtCore import QMimeData, QPointF, Qt, Signal
+from PySide6.QtCore import QMimeData, QPoint, QPointF, Qt, Signal
 from PySide6.QtGui import QBrush, QColor, QFont, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -13,12 +15,15 @@ from PySide6.QtWidgets import (
     QGraphicsScene,
     QGraphicsTextItem,
     QGraphicsView,
+    QInputDialog,
     QListWidget,
+    QMenu,
     QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
+from .custom_blocks import save_custom_block
 from .model import Connection, Graph, Node, new_id
 from .nodes import label_for, make_node, node_has_summary, summary_for
 
@@ -43,13 +48,28 @@ NODE_COLORS = {
     "delay": {"header": QColor("#4d3a12"), "border": QColor("#d19a3d"), "selected": QColor("#ffc966")},
     "log": {"header": QColor("#3a1a4d"), "border": QColor("#a34fd1"), "selected": QColor("#d38aff")},
     "ocr": {"header": QColor("#134a42"), "border": QColor("#2bb8a3"), "selected": QColor("#5fe8d5")},
+    "set_variable": {"header": QColor("#173c4d"), "border": QColor("#3fa9d1"), "selected": QColor("#7fd4ff")},
+    "if": {"header": QColor("#4d2d17"), "border": QColor("#d1793f"), "selected": QColor("#ffab6f")},
+    "for_loop": {"header": QColor("#3d1a1a"), "border": QColor("#c94f4f"), "selected": QColor("#ff8a8a")},
+    "while_loop": {"header": QColor("#3d1a1a"), "border": QColor("#c94f4f"), "selected": QColor("#ff8a8a")},
+    "until_loop": {"header": QColor("#3d1a1a"), "border": QColor("#c94f4f"), "selected": QColor("#ff8a8a")},
+    "connector": {"header": QColor("#2d2d2d"), "border": QColor("#9aa4b2"), "selected": QColor("#e6e6e6")},
     "_default": {"header": QColor("#1f2329"), "border": QColor("#4a4f58"), "selected": QColor("#4fa3ff")},
 }
+CONNECTOR_WIDTH = 56
 ACCENT_WIDTH = 4
 
 
 class PortItem(QGraphicsEllipseItem):
-    def __init__(self, node_item: "NodeItem", name: str, direction: str, row: int, port_area_top: int = NODE_HEADER):
+    def __init__(
+        self,
+        node_item: "NodeItem",
+        name: str,
+        direction: str,
+        row: int,
+        port_area_top: int = NODE_HEADER,
+        width: int = NODE_WIDTH,
+    ):
         super().__init__(-PORT_RADIUS, -PORT_RADIUS, PORT_RADIUS * 2, PORT_RADIUS * 2, node_item)
         self.node_item = node_item
         self.name = name
@@ -59,7 +79,7 @@ class PortItem(QGraphicsEllipseItem):
         self.setAcceptHoverEvents(True)
         self.setZValue(2)
 
-        x = 0 if direction == "in" else NODE_WIDTH
+        x = 0 if direction == "in" else width
         y = port_area_top + PORT_ROW * row + PORT_ROW / 2
         self.setPos(x, y)
 
@@ -107,7 +127,49 @@ class ConnectionItem(QGraphicsPathItem):
         self.setPath(path)
 
 
-class NodeItem(QGraphicsRectItem):
+class NodeItemBase:
+    """Marker mixin shared by NodeItem (rectangular blocks) and ConnectorNodeItem
+    (the circular routing node) so scene-level code (selection, double-click,
+    delete) can treat both uniformly without caring which Qt shape backs them."""
+
+
+class MenuButtonItem(QGraphicsRectItem):
+    """The "..." button in a node's title bar; GraphScene intercepts clicks on it
+    (checked before the general port/pan handling) and opens the node's context
+    menu (Duplicate / Delete / Save as Custom Block)."""
+
+    SIZE = 16
+
+    def __init__(self, node_item: "NodeItem", pos: Optional[tuple] = None):
+        super().__init__(-self.SIZE / 2, -self.SIZE / 2, self.SIZE, self.SIZE, node_item)
+        self.node_item = node_item
+        self.setBrush(QBrush(Qt.transparent))
+        self.setPen(QPen(Qt.NoPen))
+        self.setZValue(3)
+        self.setAcceptHoverEvents(True)
+        if pos is None:
+            pos = (NODE_WIDTH - self.SIZE / 2 - 4, NODE_HEADER / 2)
+        self.setPos(*pos)
+
+        self.label = QGraphicsTextItem("⋮", self)
+        self.label.setDefaultTextColor(TEXT_COLOR)
+        font = QFont()
+        font.setBold(True)
+        font.setPointSize(11)
+        self.label.setFont(font)
+        rect = self.label.boundingRect()
+        self.label.setPos(-rect.width() / 2, -rect.height() / 2 - 2)
+
+    def hoverEnterEvent(self, event):
+        self.setBrush(QBrush(QColor(255, 255, 255, 40)))
+        super().hoverEnterEvent(event)
+
+    def hoverLeaveEvent(self, event):
+        self.setBrush(QBrush(Qt.transparent))
+        super().hoverLeaveEvent(event)
+
+
+class NodeItem(QGraphicsRectItem, NodeItemBase):
     def __init__(self, node: Node):
         self.has_summary = node_has_summary(node.type)
         self.port_area_top = NODE_HEADER + (SUMMARY_ROW if self.has_summary else 0)
@@ -143,6 +205,8 @@ class NodeItem(QGraphicsRectItem):
         font.setPointSize(9)
         self.title.setFont(font)
         self.title.setPos(8, 3)
+
+        self.menu_button = MenuButtonItem(self)
 
         if self.has_summary:
             self.summary = QGraphicsTextItem("", self)
@@ -182,8 +246,75 @@ class NodeItem(QGraphicsRectItem):
         super().paint(painter, option, widget)
 
 
+class ConnectorNodeItem(QGraphicsEllipseItem, NodeItemBase):
+    """A Connector: a small circular junction with one input and 1+ outputs, used to
+    fan a single trigger out to several destinations and keep wire routing tidy. No
+    title bar or summary row - just an optional name label and its ports."""
+
+    def __init__(self, node: Node):
+        rows = max(len(node.inputs), len(node.outputs), 1)
+        height = max(CONNECTOR_WIDTH, PORT_ROW * rows + 20)
+        super().__init__(0, 0, CONNECTOR_WIDTH, height)
+        self.node = node
+        self.has_summary = False
+        self.colors = NODE_COLORS.get(node.type, NODE_COLORS["_default"])
+        self.setPos(node.x, node.y)
+        self.setBrush(QBrush(NODE_BG))
+        self.setPen(QPen(self.colors["border"], 1))
+        self.setFlags(
+            QGraphicsItem.ItemIsMovable
+            | QGraphicsItem.ItemIsSelectable
+            | QGraphicsItem.ItemSendsGeometryChanges
+        )
+        self.setZValue(1)
+
+        self.menu_button = MenuButtonItem(
+            self, pos=(CONNECTOR_WIDTH - MenuButtonItem.SIZE / 2 - 2, MenuButtonItem.SIZE / 2 + 2)
+        )
+
+        self.label = QGraphicsTextItem("", self)
+        self.label.setDefaultTextColor(TEXT_COLOR)
+        font = QFont()
+        font.setBold(True)
+        font.setPointSize(8)
+        self.label.setFont(font)
+        self.summary = None
+        self.refresh_summary()
+        self._center_label(height)
+
+        self.in_ports: Dict[str, PortItem] = {}
+        self.out_ports: Dict[str, PortItem] = {}
+        for i, p in enumerate(node.inputs):
+            self.in_ports[p.name] = PortItem(self, p.name, "in", i, 0, width=CONNECTOR_WIDTH)
+        for i, p in enumerate(node.outputs):
+            self.out_ports[p.name] = PortItem(self, p.name, "out", i, 0, width=CONNECTOR_WIDTH)
+
+    def _center_label(self, height: float) -> None:
+        rect = self.label.boundingRect()
+        self.label.setPos((CONNECTOR_WIDTH - rect.width()) / 2, (height - rect.height()) / 2)
+
+    def refresh_summary(self) -> None:
+        self.label.setPlainText(self.node.props.get("name") or "•")
+        self._center_label(self.rect().height())
+
+    def itemChange(self, change, value):
+        if change == QGraphicsItem.ItemPositionHasChanged:
+            self.node.x = self.pos().x()
+            self.node.y = self.pos().y()
+            scene = self.scene()
+            if isinstance(scene, GraphScene):
+                scene.refresh_connections_for(self.node.id)
+        return super().itemChange(change, value)
+
+    def paint(self, painter, option, widget=None):
+        border = self.colors["selected"] if self.isSelected() else self.colors["border"]
+        self.setPen(QPen(border, 2 if self.isSelected() else 1))
+        super().paint(painter, option, widget)
+
+
 class GraphScene(QGraphicsScene):
     node_double_clicked = Signal(str)
+    custom_block_saved = Signal(str)
 
     def __init__(self, graph: Graph):
         super().__init__()
@@ -207,7 +338,7 @@ class GraphScene(QGraphicsScene):
             self._add_connection_item(conn)
 
     def _add_node_item(self, node: Node) -> NodeItem:
-        item = NodeItem(node)
+        item = ConnectorNodeItem(node) if node.type == "connector" else NodeItem(node)
         self.addItem(item)
         self.node_items[node.id] = item
         return item
@@ -219,26 +350,67 @@ class GraphScene(QGraphicsScene):
         self.addItem(item)
         self.conn_items[conn.id] = item
 
-    def add_node(self, node_type: str, pos: QPointF) -> Node:
-        node = make_node(node_type, new_id(), pos.x(), pos.y())
+    def add_node(self, node_type: str, pos: QPointF, props: Optional[dict] = None) -> Node:
+        node = make_node(node_type, new_id(), pos.x(), pos.y(), props=props)
         self.graph.add_node(node)
         self._add_node_item(node)
         return node
 
+    def delete_node(self, node_id: str) -> None:
+        item = self.node_items.get(node_id)
+        if item is None:
+            return
+        for cid in [
+            c.conn_id
+            for c in self.conn_items.values()
+            if c.source.node_item.node.id == node_id
+            or (c.target is not None and c.target.node_item.node.id == node_id)
+        ]:
+            self._remove_connection_item(cid)
+        self.graph.remove_node(node_id)
+        self.removeItem(item)
+        del self.node_items[node_id]
+
+    def duplicate_node(self, node_id: str) -> Optional[Node]:
+        """Clones a node's type and props (not its connections) at an offset
+        position."""
+        node = self.graph.nodes.get(node_id)
+        if node is None:
+            return None
+        return self.add_node(node.type, QPointF(node.x + 30, node.y + 30), props=copy.deepcopy(node.props))
+
+    def save_node_as_custom_block(self, node_id: str) -> None:
+        node = self.graph.nodes.get(node_id)
+        if node is None:
+            return
+        view = self.views()[0] if self.views() else None
+        name, ok = QInputDialog.getText(view, "Save as Custom Block", "Block name:")
+        name = name.strip()
+        if not ok or not name:
+            return
+        save_custom_block(name, node.type, copy.deepcopy(node.props))
+        self.custom_block_saved.emit(name)
+
+    def _show_node_menu(self, node_item: "NodeItem", screen_pos: QPointF) -> None:
+        node_id = node_item.node.id
+        view = self.views()[0] if self.views() else None
+        menu = QMenu(view)
+        duplicate_act = menu.addAction("Duplicate")
+        delete_act = menu.addAction("Delete")
+        menu.addSeparator()
+        save_act = menu.addAction("Save as Custom Block...")
+        chosen = menu.exec(QPoint(int(screen_pos.x()), int(screen_pos.y())))
+        if chosen is duplicate_act:
+            self.duplicate_node(node_id)
+        elif chosen is delete_act:
+            self.delete_node(node_id)
+        elif chosen is save_act:
+            self.save_node_as_custom_block(node_id)
+
     def delete_selected(self) -> None:
         for item in list(self.selectedItems()):
-            if isinstance(item, NodeItem):
-                node_id = item.node.id
-                for cid in [
-                    c.conn_id
-                    for c in self.conn_items.values()
-                    if c.source.node_item.node.id == node_id
-                    or (c.target is not None and c.target.node_item.node.id == node_id)
-                ]:
-                    self._remove_connection_item(cid)
-                self.graph.remove_node(node_id)
-                self.removeItem(item)
-                del self.node_items[node_id]
+            if isinstance(item, NodeItemBase):
+                self.delete_node(item.node.id)
             elif isinstance(item, ConnectionItem):
                 self._remove_connection_item(item.conn_id)
 
@@ -247,6 +419,34 @@ class GraphScene(QGraphicsScene):
         if item is not None:
             self.removeItem(item)
         self.graph.remove_connection(conn_id)
+
+    def rebuild_node(self, node_id: str) -> Optional[NodeItem]:
+        """Replaces a node's visual item in place - needed after an edit that changes
+        its port count (e.g. the If block's Elif rows). Any graph connections whose
+        port no longer exists must already be removed from self.graph before this is
+        called; connections still valid are re-attached to the new item."""
+        old_item = self.node_items.get(node_id)
+        if old_item is None:
+            return None
+        touching = [
+            c.conn_id
+            for c in self.conn_items.values()
+            if c.source.node_item.node.id == node_id
+            or (c.target is not None and c.target.node_item.node.id == node_id)
+        ]
+        for cid in touching:
+            item = self.conn_items.pop(cid, None)
+            if item is not None:
+                self.removeItem(item)
+        self.removeItem(old_item)
+        del self.node_items[node_id]
+
+        node = self.graph.nodes[node_id]
+        new_item = self._add_node_item(node)
+        for conn in self.graph.connections.values():
+            if conn.from_node == node_id or conn.to_node == node_id:
+                self._add_connection_item(conn)
+        return new_item
 
     def refresh_connections_for(self, node_id: str) -> None:
         for c in self.conn_items.values():
@@ -262,6 +462,14 @@ class GraphScene(QGraphicsScene):
     def mousePressEvent(self, event):
         transform = self._view_transform()
         item = self.itemAt(event.scenePos(), transform) if transform is not None else None
+        # Walk up from whatever was actually hit - a click on the "..." glyph lands on
+        # its child QGraphicsTextItem, not the MenuButtonItem rect underneath it.
+        menu_btn = item
+        while menu_btn is not None and not isinstance(menu_btn, MenuButtonItem):
+            menu_btn = menu_btn.parentItem()
+        if menu_btn is not None:
+            self._show_node_menu(menu_btn.node_item, event.screenPos())
+            return
         if isinstance(item, PortItem):
             if item.direction == "out":
                 # Start a brand new connection from this output.
@@ -336,7 +544,7 @@ class GraphScene(QGraphicsScene):
         transform = self._view_transform()
         item = self.itemAt(event.scenePos(), transform) if transform is not None else None
         node_item = item
-        while node_item is not None and not isinstance(node_item, NodeItem):
+        while node_item is not None and not isinstance(node_item, NodeItemBase):
             node_item = node_item.parentItem()
         if node_item is not None:
             self.node_double_clicked.emit(node_item.node.id)
@@ -349,11 +557,14 @@ NODE_TYPE_MIME = "application/x-aqx-node-type"
 
 class NodePaletteList(QListWidget):
     """The node palette: items can be dragged onto the canvas to place a node there,
-    or double-clicked to add one at the center of the current view."""
+    or double-clicked to add one at the center of the current view. Each entry is
+    {"node_type": str, "props": dict | None, "label": str} - a plain builtin block
+    has props=None (defaults apply); a saved custom block carries its stored props,
+    pre-filling the new node with them."""
 
-    def __init__(self, node_types: list, parent=None):
+    def __init__(self, entries: list, parent=None):
         super().__init__(parent)
-        self.node_types = node_types
+        self.entries = entries
         self.setDragEnabled(True)
         self.setDragDropMode(QAbstractItemView.DragOnly)
 
@@ -363,8 +574,9 @@ class NodePaletteList(QListWidget):
     def mimeData(self, items):
         mime = QMimeData()
         if items:
-            node_type = self.node_types[self.row(items[0])]
-            mime.setData(NODE_TYPE_MIME, node_type.encode("utf-8"))
+            entry = self.entries[self.row(items[0])]
+            payload = json.dumps({"node_type": entry["node_type"], "props": entry.get("props")})
+            mime.setData(NODE_TYPE_MIME, payload.encode("utf-8"))
         return mime
 
 
@@ -455,10 +667,10 @@ class GraphView(QGraphicsView):
 
     def dropEvent(self, event):
         if event.mimeData().hasFormat(NODE_TYPE_MIME):
-            node_type = bytes(event.mimeData().data(NODE_TYPE_MIME)).decode("utf-8")
+            payload = json.loads(bytes(event.mimeData().data(NODE_TYPE_MIME)).decode("utf-8"))
             drop_pos = event.position().toPoint() if hasattr(event, "position") else event.pos()
             scene_pos = self.mapToScene(drop_pos) - QPointF(NODE_WIDTH / 2, NODE_HEADER / 2)
-            self.scene().add_node(node_type, scene_pos)
+            self.scene().add_node(payload["node_type"], scene_pos, props=payload.get("props"))
             event.acceptProposedAction()
         else:
             super().dropEvent(event)

@@ -5,8 +5,8 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import Qt, QPointF, QTimer
-from PySide6.QtGui import QAction, QFont
+from PySide6.QtCore import QPointF, QRectF, Qt, QTimer
+from PySide6.QtGui import QAction, QBrush, QColor, QFont, QIcon, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -28,12 +28,51 @@ from ..emergency import GlobalEmergencyStop
 from ..overlay import CountdownOverlay
 from ..paths import FLOWS_DIR, RECORDINGS_DIR
 from ..recording.player import StopFlag
+from .connector_dialog import ConnectorDialog
+from .custom_blocks import list_custom_blocks
+from .if_dialog import IfDialog
+from .loop_dialog import LoopDialog
 from .model import Graph
-from .nodes import NODE_SPECS, label_for
+from .nodes import NODE_SPECS, LOOP_TYPES, label_for
 from .ocr_dialog import OCRNodeDialog
 from .record_dialog import RecordBlockDialog
 from .runner import GraphRunner
+from .variable_dialog import SetVariableDialog
 from .view import GraphScene, GraphView, NodePaletteList
+
+PLAY_COLOR = QColor("#2fae60")
+STOP_COLOR = QColor("#d1493f")
+INACTIVE_COLOR = QColor("#5a5f68")
+
+
+def _triangle_icon(color: QColor, size: int = 20) -> QIcon:
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.Antialiasing)
+    painter.setBrush(QBrush(color))
+    painter.setPen(Qt.NoPen)
+    path = QPainterPath()
+    path.moveTo(size * 0.28, size * 0.15)
+    path.lineTo(size * 0.28, size * 0.85)
+    path.lineTo(size * 0.85, size * 0.5)
+    path.closeSubpath()
+    painter.drawPath(path)
+    painter.end()
+    return QIcon(pixmap)
+
+
+def _square_icon(color: QColor, size: int = 20) -> QIcon:
+    pixmap = QPixmap(size, size)
+    pixmap.fill(Qt.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.Antialiasing)
+    painter.setBrush(QBrush(color))
+    painter.setPen(Qt.NoPen)
+    margin = size * 0.22
+    painter.drawRoundedRect(QRectF(margin, margin, size - 2 * margin, size - 2 * margin), 2, 2)
+    painter.end()
+    return QIcon(pixmap)
 
 
 class GraphEditorWindow(QMainWindow):
@@ -56,6 +95,7 @@ class GraphEditorWindow(QMainWindow):
         self.global_stop = global_stop
         self.current_flow_path: Optional[Path] = None
         self._palette_types = list(NODE_SPECS.keys())
+        self._is_running = False
 
         self.run_overlay = CountdownOverlay()
         self._run_countdown_timer = QTimer(self)
@@ -83,20 +123,44 @@ class GraphEditorWindow(QMainWindow):
 
         self.view.reset_view()
 
+    def _palette_entries(self) -> list:
+        entries = [{"node_type": t, "props": None, "label": label_for(t)} for t in self._palette_types]
+        for block in list_custom_blocks():
+            entries.append(
+                {
+                    "node_type": block["base_type"],
+                    "props": block["props"],
+                    "label": f"{block['name']} ({label_for(block['base_type'])})",
+                }
+            )
+        return entries
+
     def _build_palette(self) -> None:
         self.palette_dock = QDockWidget("Nodes (drag or double-click to add)", self)
-        listw = NodePaletteList(self._palette_types)
-        for node_type in self._palette_types:
-            listw.addItem(QListWidgetItem(label_for(node_type)))
+        listw = NodePaletteList(self._palette_entries())
+        for entry in listw.entries:
+            listw.addItem(QListWidgetItem(entry["label"]))
         listw.itemDoubleClicked.connect(self._on_palette_double_click)
         self.palette_dock.setWidget(listw)
         self.addDockWidget(Qt.LeftDockWidgetArea, self.palette_dock)
+        self.scene.custom_block_saved.connect(self._on_custom_block_saved)
+
+    def _refresh_palette(self) -> None:
+        listw = self.palette_dock.widget()
+        listw.entries = self._palette_entries()
+        listw.clear()
+        for entry in listw.entries:
+            listw.addItem(QListWidgetItem(entry["label"]))
+
+    def _on_custom_block_saved(self, name: str) -> None:
+        self._log(f"Saved custom block: {name}")
+        self._refresh_palette()
 
     def _on_palette_double_click(self, item: QListWidgetItem) -> None:
-        row = item.listWidget().row(item)
-        node_type = self._palette_types[row]
+        listw = item.listWidget()
+        entry = listw.entries[listw.row(item)]
         center = self.view.mapToScene(self.view.viewport().rect().center())
-        self.scene.add_node(node_type, center)
+        self.scene.add_node(entry["node_type"], center, props=entry.get("props"))
 
     def _build_toolbar(self) -> None:
         tb = QToolBar("Main")
@@ -130,17 +194,23 @@ class GraphEditorWindow(QMainWindow):
 
         tb.addSeparator()
 
-        self.run_act = QAction(style.standardIcon(QStyle.StandardPixmap.SP_MediaPlay), "Run", self)
+        self._play_icon_active = _triangle_icon(PLAY_COLOR)
+        self._play_icon_inactive = _triangle_icon(INACTIVE_COLOR)
+        self._stop_icon_active = _square_icon(STOP_COLOR)
+        self._stop_icon_inactive = _square_icon(INACTIVE_COLOR)
+
+        self.run_act = QAction(self._play_icon_active, "Run", self)
         self.run_act.setToolTip("Run")
         self.run_act.triggered.connect(self._run)
         tb.addAction(self.run_act)
         tb.widgetForAction(self.run_act).setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
 
-        stop_act = QAction(style.standardIcon(QStyle.StandardPixmap.SP_MediaStop), "Stop", self)
-        stop_act.setToolTip("Stop")
-        stop_act.triggered.connect(self._stop)
-        tb.addAction(stop_act)
-        tb.widgetForAction(stop_act).setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        self.stop_act = QAction(self._stop_icon_inactive, "Stop", self)
+        self.stop_act.setToolTip("Stop")
+        self.stop_act.triggered.connect(self._stop)
+        tb.addAction(self.stop_act)
+        tb.widgetForAction(self.stop_act).setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+        self._set_running_state(False)
 
         clear_log_act = QAction("Clear Log", self)
         clear_log_act.triggered.connect(lambda: self.log_view.clear())
@@ -308,10 +378,55 @@ class GraphEditorWindow(QMainWindow):
             dlg.finished.connect(on_finished)
             dlg.show()
             return
+        elif node.type == "set_variable":
+            dlg = SetVariableDialog(self, self.graph, node)
+            if dlg.exec() == QDialog.Accepted:
+                dlg.apply_to_node()
+        elif node.type in LOOP_TYPES:
+            dlg = LoopDialog(self, self.graph, node)
+            if dlg.exec() == QDialog.Accepted:
+                dlg.apply_to_node()
+        elif node.type == "if":
+            dlg = IfDialog(self, self.graph, node)
+            if dlg.exec() == QDialog.Accepted:
+                dlg.apply_to_node()
+                self._apply_output_port_change(node_id, node)
+                return
+        elif node.type == "connector":
+            dlg = ConnectorDialog(self, node)
+            if dlg.exec() == QDialog.Accepted:
+                dlg.apply_to_node()
+                self._apply_output_port_change(node_id, node)
+                return
 
         item = self.scene.node_items.get(node_id)
         if item is not None:
             item.refresh_summary()
+
+    def _apply_output_port_change(self, node_id: str, node) -> None:
+        """After a dialog changes a node's output port count (If's Elif rows,
+        Connector's fan-out count), drop any connections that pointed at a port that
+        no longer exists, then rebuild the node's visual item to match."""
+        valid_ports = {p.name for p in node.outputs}
+        stale = [
+            c.id
+            for c in self.graph.connections.values()
+            if c.from_node == node_id and c.from_port not in valid_ports
+        ]
+        for conn_id in stale:
+            self.scene._remove_connection_item(conn_id)
+        self.scene.rebuild_node(node_id)
+
+    def _set_running_state(self, running: bool) -> None:
+        """Play is only clickable while idle (an already-running flow can't be
+        started again from underneath itself); Stop is only clickable while
+        something is actually running or counting down. Icon color follows the same
+        state so it's visible at a glance, not just via the disabled look."""
+        self._is_running = running
+        self.run_act.setEnabled(not running)
+        self.run_act.setIcon(self._play_icon_inactive if running else self._play_icon_active)
+        self.stop_act.setEnabled(running)
+        self.stop_act.setIcon(self._stop_icon_active if running else self._stop_icon_inactive)
 
     def _run(self) -> None:
         self.stop_flag.clear()
@@ -324,7 +439,7 @@ class GraphEditorWindow(QMainWindow):
             self._run_now()
 
     def _start_run_countdown(self) -> None:
-        self.run_act.setEnabled(False)
+        self._set_running_state(True)
         self._run_countdown_remaining = self.settings.prep_delay_seconds
         self._on_run_countdown_tick()
         self._run_countdown_timer.start(1000)
@@ -333,7 +448,7 @@ class GraphEditorWindow(QMainWindow):
         if self.stop_flag.is_set():
             self._run_countdown_timer.stop()
             self.run_overlay.hide()
-            self.run_act.setEnabled(True)
+            self._set_running_state(False)
             self._log("Run cancelled before it started.")
             return
         if self._run_countdown_remaining > 0:
@@ -343,15 +458,16 @@ class GraphEditorWindow(QMainWindow):
             return
         self._run_countdown_timer.stop()
         self.run_overlay.hide()
-        self.run_act.setEnabled(True)
         self._run_now()
 
     def _run_now(self) -> None:
         self.stop_flag.clear()
+        self._set_running_state(True)
         self.runner = GraphRunner(self.graph, self.stop_flag, RECORDINGS_DIR)
         self.runner.status.connect(self._on_runner_status, Qt.QueuedConnection)
         self.runner.node_started.connect(self._highlight_node, Qt.QueuedConnection)
         self.runner.node_updated.connect(self._refresh_node_summary, Qt.QueuedConnection)
+        self.runner.finished.connect(self._on_run_finished, Qt.QueuedConnection)
         self._log("Run started.")
         thread = threading.Thread(target=self.runner.run, daemon=True)
         thread.start()
@@ -360,14 +476,21 @@ class GraphEditorWindow(QMainWindow):
         self.statusBar().showMessage(text, 4000)
         self._log(text)
 
+    def _on_run_finished(self) -> None:
+        self._set_running_state(False)
+
     def _stop(self) -> None:
         self.stop_flag.set()
         if self._run_countdown_timer.isActive():
             self._run_countdown_timer.stop()
             self.run_overlay.hide()
-            self.run_act.setEnabled(True)
+            self._set_running_state(False)
             self._log("Run cancelled before it started.")
         else:
+            # The runner thread is still winding down - Stop itself is now a no-op
+            # (nothing more to cancel), but Run must stay disabled until the
+            # `finished` signal confirms the runner has actually exited.
+            self.stop_act.setEnabled(False)
             self._log("Stop requested.")
 
     def _highlight_node(self, node_id: str) -> None:

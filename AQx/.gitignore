@@ -5,3 +5,5 @@ __pycache__/
 data/recordings/*.json
 data/flows/*.json
 data/regions/*.json
+data/custom_blocks/*.json
+*.bak-*

@@ -1,6 +1,6 @@
 [project]
 name = "aqx"
-version = "0.1.0"
+version = "0.0.3"
 description = "AQx — macOS desktop automation: mouse/keyboard recorder and node-graph editor"
 requires-python = ">=3.11"
 dependencies = [
