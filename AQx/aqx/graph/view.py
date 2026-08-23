@@ -42,6 +42,7 @@ NODE_COLORS = {
     "recorded_block": {"header": QColor("#17324d"), "border": QColor("#3f8fd1"), "selected": QColor("#6fbaff")},
     "delay": {"header": QColor("#4d3a12"), "border": QColor("#d19a3d"), "selected": QColor("#ffc966")},
     "log": {"header": QColor("#3a1a4d"), "border": QColor("#a34fd1"), "selected": QColor("#d38aff")},
+    "ocr": {"header": QColor("#134a42"), "border": QColor("#2bb8a3"), "selected": QColor("#5fe8d5")},
     "_default": {"header": QColor("#1f2329"), "border": QColor("#4a4f58"), "selected": QColor("#4fa3ff")},
 }
 ACCENT_WIDTH = 4

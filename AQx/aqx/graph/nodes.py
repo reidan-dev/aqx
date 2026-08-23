@@ -29,6 +29,12 @@ NODE_SPECS: Dict[str, dict] = {
         "outputs": [Port("out", "exec")],
         "default_props": {"message": "log message"},
     },
+    "ocr": {
+        "label": "OCR",
+        "inputs": [Port("in", "exec")],
+        "outputs": [Port("out", "exec")],
+        "default_props": {"region": "", "interval_seconds": 5.0, "last_value": None},
+    },
 }
 
 
@@ -71,4 +77,10 @@ def summary_for(node: Node) -> str:
         repeat = node.props.get("repeat", 1)
         repeat_str = "×∞" if repeat == 0 else f"×{repeat}"
         return _truncate(f"{recording} {repeat_str}")
+    if node.type == "ocr":
+        region = node.props.get("region") or "(none)"
+        interval = node.props.get("interval_seconds", 5.0)
+        last_value = node.props.get("last_value")
+        value_str = f"'{_truncate(str(last_value), 8)}'" if last_value else "–"
+        return _truncate(f"{region} @{interval}s → {value_str}")
     return ""

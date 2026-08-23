@@ -5,7 +5,10 @@ description = "AQx — macOS desktop automation: mouse/keyboard recorder and nod
 requires-python = ">=3.11"
 dependencies = [
     "PySide6>=6.11",
+    "pillow>=12.3.0",
     "pynput>=1.7",
+    "pyobjc-framework-quartz>=12.2.2",
+    "pyobjc-framework-vision>=12.2.2",
 ]
 
 [project.scripts]

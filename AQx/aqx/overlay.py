@@ -6,10 +6,10 @@ from PySide6.QtWidgets import QApplication, QLabel
 
 class CountdownOverlay(QLabel):
     """A frameless, click-through, always-on-top indicator for a prep countdown and
-    subsequent status (recording, or running an automation). The whole point of the
-    countdown is to give the user time to switch focus to the target app - at which
-    point AQx's own windows are no longer visible, so this needs its own always-on-top
-    surface that survives that app switch."""
+    subsequent status (recording, running an automation, or picking a screen region).
+    The whole point is to give the user time to switch focus to the target app - at
+    which point AQx's own windows are no longer visible, so this needs its own
+    always-on-top surface that survives that app switch."""
 
     def __init__(self):
         super().__init__()

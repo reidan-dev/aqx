@@ -6,6 +6,9 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
 
+from ..ocr.capture import capture_cgimage
+from ..ocr.engine import read_text_from_cgimage
+from ..ocr.region import Region
 from ..recording.events import InputEvent
 from ..recording.player import Player, StopFlag
 from .model import Graph
@@ -14,6 +17,7 @@ from .model import Graph
 class GraphRunner(QObject):
     status = Signal(str)
     node_started = Signal(str)
+    node_updated = Signal(str)
     finished = Signal()
 
     def __init__(self, graph: Graph, stop_flag: StopFlag, recordings_dir: Path):
@@ -57,6 +61,7 @@ class GraphRunner(QObject):
                 return False
             self.node_started.emit(current.id)
             self._execute(current)
+            self.node_updated.emit(current.id)
             conn = self.graph.outgoing(current.id, "out")
             current = self.graph.nodes.get(conn.to_node) if conn else None
         return True
@@ -88,3 +93,32 @@ class GraphRunner(QObject):
             events = [InputEvent.from_dict(e) for e in data.get("events", [])]
             repeat = int(node.props.get("repeat", 1))
             Player(events, self.stop_flag, speed=1.0).run(repeat=repeat)
+        elif node.type == "ocr":
+            self._execute_ocr(node)
+
+    def _execute_ocr(self, node) -> None:
+        region_name = node.props.get("region")
+        if not region_name:
+            self.status.emit(f"OCR '{node.id}' has no region set.")
+            return
+        try:
+            region = Region.load(region_name)
+        except FileNotFoundError:
+            self.status.emit(f"OCR region not found: {region_name}")
+            return
+
+        image_ref = capture_cgimage(region.x, region.y, region.width, region.height)
+        value = read_text_from_cgimage(image_ref)
+        node.props["last_value"] = value
+        self.status.emit(f"OCR '{region_name}': {value!r}" if value is not None else f"OCR '{region_name}': no text detected")
+
+        # Delay after the read, not a background timer - looping back to this node
+        # (e.g. via the flow's Loops setting) is what gives "read every N seconds".
+        interval = float(node.props.get("interval_seconds", 5.0))
+        waited = 0.0
+        while waited < interval:
+            if self.stop_flag.is_set():
+                return
+            step = min(0.05, interval - waited)
+            time.sleep(step)
+            waited += step

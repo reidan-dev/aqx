@@ -20,9 +20,9 @@ from PySide6.QtWidgets import (
 
 from ..config import Settings
 from ..emergency import GlobalEmergencyStop
+from ..overlay import CountdownOverlay
 from ..paths import RECORDINGS_DIR
 from ..recording.recorder import Recorder
-from .countdown_overlay import CountdownOverlay
 
 
 class _RecorderBridge(QObject):

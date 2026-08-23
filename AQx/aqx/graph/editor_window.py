@@ -25,11 +25,12 @@ from PySide6.QtWidgets import (
 
 from ..config import Settings
 from ..emergency import GlobalEmergencyStop
+from ..overlay import CountdownOverlay
 from ..paths import FLOWS_DIR, RECORDINGS_DIR
 from ..recording.player import StopFlag
-from .countdown_overlay import CountdownOverlay
 from .model import Graph
 from .nodes import NODE_SPECS, label_for
+from .ocr_dialog import OCRNodeDialog
 from .record_dialog import RecordBlockDialog
 from .runner import GraphRunner
 from .view import GraphScene, GraphView, NodePaletteList
@@ -284,6 +285,29 @@ class GraphEditorWindow(QMainWindow):
             if dlg.exec() == QDialog.Accepted:
                 node.props["recording"] = dlg.selected_recording
                 node.props["repeat"] = dlg.selected_repeat
+        elif node.type == "ocr":
+            # Shown non-modally (.show(), not .exec()): on macOS any modal QDialog
+            # triggers a native Cocoa modal session that blocks mouse input to every
+            # other window in the app, including the region picker's own toolbar -
+            # confirmed directly with real synthetic clicks. So changes apply via the
+            # finished signal instead of a blocking return value, and the dialog is
+            # kept alive on self (a non-modal dialog isn't held open by a blocking
+            # call, so a bare local variable would go out of scope and be
+            # garbage-collected while the user is still using it).
+            dlg = OCRNodeDialog(self, node.props.get("region", ""), float(node.props.get("interval_seconds", 5.0)))
+            self._active_ocr_dialog = dlg
+
+            def on_finished(result, node=node, dlg=dlg):
+                if result == QDialog.Accepted:
+                    node.props["region"] = dlg.selected_region
+                    node.props["interval_seconds"] = dlg.selected_interval
+                item = self.scene.node_items.get(node.id)
+                if item is not None:
+                    item.refresh_summary()
+
+            dlg.finished.connect(on_finished)
+            dlg.show()
+            return
 
         item = self.scene.node_items.get(node_id)
         if item is not None:
@@ -327,6 +351,7 @@ class GraphEditorWindow(QMainWindow):
         self.runner = GraphRunner(self.graph, self.stop_flag, RECORDINGS_DIR)
         self.runner.status.connect(self._on_runner_status, Qt.QueuedConnection)
         self.runner.node_started.connect(self._highlight_node, Qt.QueuedConnection)
+        self.runner.node_updated.connect(self._refresh_node_summary, Qt.QueuedConnection)
         self._log("Run started.")
         thread = threading.Thread(target=self.runner.run, daemon=True)
         thread.start()
@@ -348,3 +373,8 @@ class GraphEditorWindow(QMainWindow):
     def _highlight_node(self, node_id: str) -> None:
         for nid, item in self.scene.node_items.items():
             item.setSelected(nid == node_id)
+
+    def _refresh_node_summary(self, node_id: str) -> None:
+        item = self.scene.node_items.get(node_id)
+        if item is not None:
+            item.refresh_summary()

@@ -4,3 +4,4 @@ __pycache__/
 .DS_Store
 data/recordings/*.json
 data/flows/*.json
+data/regions/*.json
