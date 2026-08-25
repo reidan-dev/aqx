@@ -11,10 +11,12 @@ CONFIG_PATH = CONFIG_DIR / "settings.json"
 @dataclass
 class Settings:
     prep_delay_seconds: int = 5
-    emergency_key: str = "backspace"
+    emergency_key: str = "f12"
     playback_speed: float = 1.0
     default_repeat: int = 1
     last_flow_path: str = ""
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
 
     @staticmethod
     def load() -> "Settings":

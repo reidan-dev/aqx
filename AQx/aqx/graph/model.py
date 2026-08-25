@@ -37,6 +37,7 @@ class Connection:
     from_port: str
     to_node: str
     to_port: str
+    log_message: str = ""  # non-empty means this wire has a Log "tap" attached to it
 
 
 @dataclass
@@ -69,6 +70,12 @@ class Graph:
                 return c
         return None
 
+    def outgoing_all(self, node_id: str, port: str = "out") -> List[Connection]:
+        """Every connection leaving a given output port, in insertion order - used by
+        Connector, whose single "out" port can fan out to several destinations
+        (regular exec ports only ever follow the first match via outgoing())."""
+        return [c for c in self.connections.values() if c.from_node == node_id and c.from_port == port]
+
     def to_dict(self) -> dict:
         return {
             "version": FLOW_VERSION,
@@ -83,6 +90,7 @@ class Graph:
                     "from_port": c.from_port,
                     "to_node": c.to_node,
                     "to_port": c.to_port,
+                    "log_message": c.log_message,
                 }
                 for c in self.connections.values()
             ],

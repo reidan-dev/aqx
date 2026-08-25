@@ -25,6 +25,11 @@ class StopFlag:
         return self._event.is_set()
 
 
+class PauseFlag(StopFlag):
+    """Same shape as StopFlag, but toggled on/off repeatedly during a run (rather
+    than set once and done) to freeze and resume execution in place."""
+
+
 class Player:
     def __init__(
         self,
@@ -32,9 +37,11 @@ class Player:
         stop_flag: StopFlag,
         speed: float = 1.0,
         on_status: Optional[Callable[[str], None]] = None,
+        pause_flag: Optional[PauseFlag] = None,
     ):
         self.events = events
         self.stop_flag = stop_flag
+        self.pause_flag = pause_flag
         self.speed = max(speed, 0.01)
         self.on_status = on_status or (lambda s: None)
         self._mouse = mouse.Controller()
@@ -68,11 +75,23 @@ class Player:
         if not self.events:
             return
         origin = time.monotonic()
+        paused_total = 0.0
         for ev in self.events:
-            target = origin + ev.t / self.speed
             while True:
                 if self.stop_flag.is_set():
                     return
+                if self.pause_flag is not None and self.pause_flag.is_set():
+                    # Freeze mid-action; shift the timeline forward by however long we
+                    # were paused so playback resumes at the same relative pace
+                    # instead of bursting through every event that "missed" its cue.
+                    paused_start = time.monotonic()
+                    while self.pause_flag.is_set():
+                        if self.stop_flag.is_set():
+                            return
+                        time.sleep(0.03)
+                    paused_total += time.monotonic() - paused_start
+                    continue
+                target = origin + paused_total + ev.t / self.speed
                 remaining = target - time.monotonic()
                 if remaining <= 0:
                     break

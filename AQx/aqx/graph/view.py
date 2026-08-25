@@ -4,12 +4,13 @@ import copy
 import json
 from typing import Dict, Optional
 
-from PySide6.QtCore import QMimeData, QPoint, QPointF, Qt, Signal
-from PySide6.QtGui import QBrush, QColor, QFont, QPainterPath, QPen
+from PySide6.QtCore import QEvent, QMimeData, QPoint, QPointF, Qt, Signal
+from PySide6.QtGui import QBrush, QColor, QFont, QPainterPath, QPainterPathStroker, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QGraphicsEllipseItem,
     QGraphicsItem,
+    QGraphicsLineItem,
     QGraphicsPathItem,
     QGraphicsRectItem,
     QGraphicsScene,
@@ -25,7 +26,7 @@ from PySide6.QtWidgets import (
 
 from .custom_blocks import save_custom_block
 from .model import Connection, Graph, Node, new_id
-from .nodes import label_for, make_node, node_has_summary, summary_for
+from .nodes import HELP_TEXT, is_spliceable, label_for, make_node, node_has_summary, summary_for
 
 NODE_WIDTH = 150
 NODE_HEADER = 24
@@ -47,6 +48,7 @@ NODE_COLORS = {
     "recorded_block": {"header": QColor("#17324d"), "border": QColor("#3f8fd1"), "selected": QColor("#6fbaff")},
     "delay": {"header": QColor("#4d3a12"), "border": QColor("#d19a3d"), "selected": QColor("#ffc966")},
     "log": {"header": QColor("#3a1a4d"), "border": QColor("#a34fd1"), "selected": QColor("#d38aff")},
+    "telegram": {"header": QColor("#123a4d"), "border": QColor("#2ba0d1"), "selected": QColor("#6fcaff")},
     "ocr": {"header": QColor("#134a42"), "border": QColor("#2bb8a3"), "selected": QColor("#5fe8d5")},
     "set_variable": {"header": QColor("#173c4d"), "border": QColor("#3fa9d1"), "selected": QColor("#7fd4ff")},
     "if": {"header": QColor("#4d2d17"), "border": QColor("#d1793f"), "selected": QColor("#ffab6f")},
@@ -54,6 +56,8 @@ NODE_COLORS = {
     "while_loop": {"header": QColor("#3d1a1a"), "border": QColor("#c94f4f"), "selected": QColor("#ff8a8a")},
     "until_loop": {"header": QColor("#3d1a1a"), "border": QColor("#c94f4f"), "selected": QColor("#ff8a8a")},
     "connector": {"header": QColor("#2d2d2d"), "border": QColor("#9aa4b2"), "selected": QColor("#e6e6e6")},
+    "logic": {"header": QColor("#1f3a4d"), "border": QColor("#4fb8d1"), "selected": QColor("#8fe4ff")},
+    "loop_exit": {"header": QColor("#4d1717"), "border": QColor("#d13f3f"), "selected": QColor("#ff7f7f")},
     "_default": {"header": QColor("#1f2329"), "border": QColor("#4a4f58"), "selected": QColor("#4fa3ff")},
 }
 CONNECTOR_WIDTH = 56
@@ -106,15 +110,58 @@ class PortItem(QGraphicsEllipseItem):
         return self.mapToScene(self.rect().center())
 
 
+TAP_COLOR = QColor("#f0c674")
+
+
 class ConnectionItem(QGraphicsPathItem):
-    def __init__(self, conn_id: str, source: PortItem, target: Optional[PortItem] = None):
+    HIT_WIDTH = 14  # generous hit-test width for click/drop targeting, well beyond
+    # the thin 2px visible stroke - makes dropping a node precisely onto a wire to
+    # splice it in (see GraphScene.splice_node_onto_connection) easy to land.
+
+    STUB_LENGTH = 22  # how far the tap branch drops below the wire it's reading
+
+    def __init__(
+        self,
+        conn_id: str,
+        source: PortItem,
+        target: Optional[PortItem] = None,
+        log_message: str = "",
+    ):
         super().__init__()
         self.conn_id = conn_id
         self.source = source
         self.target = target
+        self.log_message = ""
         self.setPen(QPen(QColor("#8fb8ff"), 2))
         self.setZValue(-1)
+
+        # A probe tapped onto the wire: a small dot ON the wire itself, a thin stub
+        # branching straight off it, and a label at the end - deliberately drawn as a
+        # side-branch rather than merged into the wire, so it reads as "just reading
+        # this connection" rather than "part of the flow." Hidden until a tap is
+        # actually attached.
+        self.tap_badge = QGraphicsEllipseItem(-4, -4, 8, 8, self)
+        self.tap_badge.setBrush(QBrush(TAP_COLOR))
+        self.tap_badge.setPen(QPen(Qt.NoPen))
+        self.tap_badge.setZValue(1)
+        self.tap_badge.setVisible(False)
+
+        self.tap_stub = QGraphicsLineItem(self)
+        self.tap_stub.setPen(QPen(TAP_COLOR, 1.5, Qt.DashLine))
+        self.tap_stub.setZValue(1)
+        self.tap_stub.setVisible(False)
+
+        self.tap_label = QGraphicsTextItem("", self)
+        self.tap_label.setDefaultTextColor(TAP_COLOR)
+        label_font = QFont()
+        label_font.setPointSize(7)
+        label_font.setItalic(True)
+        self.tap_label.setFont(label_font)
+        self.tap_label.setZValue(1)
+        self.tap_label.setVisible(False)
+
         self.update_path()
+        self.set_tap_message(log_message)
 
     def update_path(self, end_pos: Optional[QPointF] = None) -> None:
         p0 = self.source.scene_center()
@@ -125,12 +172,59 @@ class ConnectionItem(QGraphicsPathItem):
         dx = max(abs(p1.x() - p0.x()) * 0.5, 40)
         path.cubicTo(QPointF(p0.x() + dx, p0.y()), QPointF(p1.x() - dx, p1.y()), p1)
         self.setPath(path)
+        if not path.isEmpty():
+            self._position_tap_visuals(path.pointAtPercent(0.5))
+
+    def _position_tap_visuals(self, tap_point: QPointF) -> None:
+        self.tap_badge.setPos(tap_point)
+        stub_end = QPointF(tap_point.x(), tap_point.y() + self.STUB_LENGTH)
+        self.tap_stub.setLine(tap_point.x(), tap_point.y(), stub_end.x(), stub_end.y())
+        label_rect = self.tap_label.boundingRect()
+        self.tap_label.setPos(stub_end.x() - label_rect.width() / 2, stub_end.y() + 1)
+
+    def set_tap_message(self, text: str) -> None:
+        self.log_message = text or ""
+        visible = bool(self.log_message)
+        self.tap_badge.setVisible(visible)
+        self.tap_stub.setVisible(visible)
+        self.tap_label.setVisible(visible)
+        preview = self.log_message if len(self.log_message) <= 24 else self.log_message[:23] + "…"
+        self.tap_label.setPlainText(f"log: {preview}" if visible else "")
+        for item in (self.tap_badge, self.tap_stub, self.tap_label):
+            item.setToolTip(self.log_message)
+        if not self.path().isEmpty():
+            self._position_tap_visuals(self.path().pointAtPercent(0.5))
+
+    def shape(self):
+        stroker = QPainterPathStroker()
+        stroker.setWidth(self.HIT_WIDTH)
+        return stroker.createStroke(self.path())
 
 
 class NodeItemBase:
     """Marker mixin shared by NodeItem (rectangular blocks) and ConnectorNodeItem
     (the circular routing node) so scene-level code (selection, double-click,
     delete) can treat both uniformly without caring which Qt shape backs them."""
+
+
+HELP_BADGE_COLOR = QColor("#7fa8c9")
+
+
+class HelpBadgeItem(QGraphicsTextItem):
+    """A small "(?)" badge describing what a block is and how to use it - purely
+    informational, shown as a native hover tooltip (QGraphicsItem tooltips work on
+    hover without any click handling needed)."""
+
+    def __init__(self, parent_item, text: str, pos: tuple):
+        super().__init__("(?)", parent_item)
+        self.setDefaultTextColor(HELP_BADGE_COLOR)
+        font = QFont()
+        font.setBold(True)
+        font.setPointSize(7)
+        self.setFont(font)
+        self.setToolTip(text)
+        self.setPos(*pos)
+        self.setZValue(3)
 
 
 class MenuButtonItem(QGraphicsRectItem):
@@ -205,8 +299,10 @@ class NodeItem(QGraphicsRectItem, NodeItemBase):
         font.setPointSize(9)
         self.title.setFont(font)
         self.title.setPos(8, 3)
+        self.setToolTip(HELP_TEXT.get(node.type, ""))
 
         self.menu_button = MenuButtonItem(self)
+        self.help_badge = HelpBadgeItem(self, HELP_TEXT.get(node.type, ""), pos=(NODE_WIDTH - 44, 5))
 
         if self.has_summary:
             self.summary = QGraphicsTextItem("", self)
@@ -246,14 +342,15 @@ class NodeItem(QGraphicsRectItem, NodeItemBase):
         super().paint(painter, option, widget)
 
 
-class ConnectorNodeItem(QGraphicsEllipseItem, NodeItemBase):
-    """A Connector: a small circular junction with one input and 1+ outputs, used to
-    fan a single trigger out to several destinations and keep wire routing tidy. No
-    title bar or summary row - just an optional name label and its ports."""
+class ConnectorNodeItem(QGraphicsRectItem, NodeItemBase):
+    """A Connector: a small square junction with one input and one output, used to
+    keep wire routing tidy. Its single "out" port can be wired to as many blocks as
+    you like directly on the canvas - dragging another wire from it doesn't replace
+    the existing one, so it fans out to all of them. No title bar or summary row -
+    just an optional name label and its two ports."""
 
     def __init__(self, node: Node):
-        rows = max(len(node.inputs), len(node.outputs), 1)
-        height = max(CONNECTOR_WIDTH, PORT_ROW * rows + 20)
+        height = CONNECTOR_WIDTH
         super().__init__(0, 0, CONNECTOR_WIDTH, height)
         self.node = node
         self.has_summary = False
@@ -267,10 +364,12 @@ class ConnectorNodeItem(QGraphicsEllipseItem, NodeItemBase):
             | QGraphicsItem.ItemSendsGeometryChanges
         )
         self.setZValue(1)
+        self.setToolTip(HELP_TEXT.get(node.type, ""))
 
         self.menu_button = MenuButtonItem(
             self, pos=(CONNECTOR_WIDTH - MenuButtonItem.SIZE / 2 - 2, MenuButtonItem.SIZE / 2 + 2)
         )
+        self.help_badge = HelpBadgeItem(self, HELP_TEXT.get(node.type, ""), pos=(2, 2))
 
         self.label = QGraphicsTextItem("", self)
         self.label.setDefaultTextColor(TEXT_COLOR)
@@ -314,6 +413,7 @@ class ConnectorNodeItem(QGraphicsEllipseItem, NodeItemBase):
 
 class GraphScene(QGraphicsScene):
     node_double_clicked = Signal(str)
+    connection_double_clicked = Signal(str)
     custom_block_saved = Signal(str)
 
     def __init__(self, graph: Graph):
@@ -326,6 +426,13 @@ class GraphScene(QGraphicsScene):
         self._panning = False
         self._pan_start = QPointF()
         self.setBackgroundBrush(QBrush(QColor("#1a1d22")))
+        # Without an explicit sceneRect, QGraphicsScene auto-sizes it to just the
+        # current items' bounding box - panning (click-drag or middle-drag) then hits
+        # a hard wall right at the edge of wherever nodes currently are. A generous
+        # fixed rect gives plenty of empty canvas to pan into on every side,
+        # regardless of how small or off-center the actual graph is.
+        margin = 6000
+        self.setSceneRect(-margin, -margin, margin * 2, margin * 2)
         self.rebuild()
 
     def rebuild(self) -> None:
@@ -346,7 +453,7 @@ class GraphScene(QGraphicsScene):
     def _add_connection_item(self, conn: Connection) -> None:
         src = self.node_items[conn.from_node].out_ports[conn.from_port]
         dst = self.node_items[conn.to_node].in_ports[conn.to_port]
-        item = ConnectionItem(conn.id, src, dst)
+        item = ConnectionItem(conn.id, src, dst, log_message=conn.log_message)
         self.addItem(item)
         self.conn_items[conn.id] = item
 
@@ -355,6 +462,42 @@ class GraphScene(QGraphicsScene):
         self.graph.add_node(node)
         self._add_node_item(node)
         return node
+
+    def connection_at(self, scene_pos: QPointF) -> Optional[ConnectionItem]:
+        transform = self._view_transform()
+        item = self.itemAt(scene_pos, transform) if transform is not None else None
+        return item if isinstance(item, ConnectionItem) else None
+
+    def splice_node_onto_connection(
+        self, node_type: str, props: Optional[dict], conn_item: ConnectionItem, pos: QPointF
+    ) -> Node:
+        """Drops a single-in/single-out node directly onto an existing wire,
+        auto-rewiring A -> new -> B in place of A -> B. This is the safe way to tap a
+        Log (or Delay, Set Variable, Connector...) onto an existing chain - hand-
+        wiring a second connection from the same output port would silently never
+        fire, since a regular block only ever follows its first outgoing wire."""
+        target = conn_item.target
+        if target is None:
+            return self.add_node(node_type, pos, props=props)
+
+        from_node_id = conn_item.source.node_item.node.id
+        from_port_name = conn_item.source.name
+        to_node_id = target.node_item.node.id
+        to_port_name = target.name
+
+        self._remove_connection_item(conn_item.conn_id)
+
+        new_node = self.add_node(node_type, pos, props=props)
+        new_in_port = new_node.inputs[0].name
+        new_out_port = new_node.outputs[0].name
+
+        conn1 = Connection(new_id(), from_node_id, from_port_name, new_node.id, new_in_port)
+        conn2 = Connection(new_id(), new_node.id, new_out_port, to_node_id, to_port_name)
+        self.graph.add_connection(conn1)
+        self.graph.add_connection(conn2)
+        self._add_connection_item(conn1)
+        self._add_connection_item(conn2)
+        return new_node
 
     def delete_node(self, node_id: str) -> None:
         item = self.node_items.get(node_id)
@@ -549,6 +692,12 @@ class GraphScene(QGraphicsScene):
         if node_item is not None:
             self.node_double_clicked.emit(node_item.node.id)
             return
+        conn_item = item
+        while conn_item is not None and not isinstance(conn_item, ConnectionItem):
+            conn_item = conn_item.parentItem()
+        if conn_item is not None:
+            self.connection_double_clicked.emit(conn_item.conn_id)
+            return
         super().mouseDoubleClickEvent(event)
 
 
@@ -594,8 +743,8 @@ class GraphView(QGraphicsView):
         self._build_zoom_controls()
 
     def _build_zoom_controls(self) -> None:
-        # A small floating +/- cluster anchored to the corner of the canvas, since
-        # scrolling now pans instead of zooming.
+        # A small floating +/- cluster anchored to the corner of the canvas, as an
+        # alternative to scroll-to-zoom for anyone who'd rather click.
         container = QWidget(self)
         container.setStyleSheet(
             "QWidget { background: rgba(35,38,44,220); border-radius: 6px; }"
@@ -640,18 +789,39 @@ class GraphView(QGraphicsView):
         super().resizeEvent(event)
         self._position_zoom_controls()
 
+    def event(self, evt):
+        # Trackpad pinch arrives as a native gesture, not a wheel event. evt.value()
+        # is the incremental scale delta since the last update - small and already
+        # smooth, so applied directly with no extra damping.
+        if evt.type() == QEvent.NativeGesture and evt.gestureType() == Qt.ZoomNativeGesture:
+            factor = 1.0 + evt.value()
+            if factor > 0:
+                self.scale(factor, factor)
+            return True
+        return super().event(evt)
+
     def wheelEvent(self, event):
-        # Scrolling pans the canvas (natural for a trackpad); use the on-screen +/-
-        # buttons or pinch-to-zoom-style Ctrl+scroll for zoom instead.
-        if event.modifiers() & Qt.ControlModifier:
-            factor = 1.15 if event.angleDelta().y() > 0 else 1 / 1.15
-            self.scale(factor, factor)
-            return
-        delta = event.pixelDelta()
-        if delta.isNull():
-            delta = event.angleDelta()
-        self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() - delta.x())
-        self.verticalScrollBar().setValue(self.verticalScrollBar().value() - delta.y())
+        # Both a trackpad's two-finger scroll (reported via pixelDelta) and a plain
+        # mouse wheel (angleDelta only) zoom - panning instead uses middle-click-drag
+        # or click-drag on empty canvas (see GraphScene), now that sceneRect gives
+        # that plenty of room to actually go somewhere.
+        pixel_delta = event.pixelDelta()
+        if not pixel_delta.isNull():
+            if pixel_delta.y() == 0:
+                return
+            # Trackpad deltas arrive in fine-grained pixel units per event (unlike a
+            # wheel's fixed 120-unit notches) - scale the step by magnitude, capped so
+            # a hard flick never causes a jarring jump.
+            step = min(abs(pixel_delta.y()), 40) / 400.0
+            factor = 1.0 + step
+        else:
+            angle_delta = event.angleDelta()
+            if angle_delta.y() == 0:
+                return
+            factor = 1.08
+        if (pixel_delta.y() if not pixel_delta.isNull() else event.angleDelta().y()) < 0:
+            factor = 1 / factor
+        self.scale(factor, factor)
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasFormat(NODE_TYPE_MIME):
@@ -668,12 +838,39 @@ class GraphView(QGraphicsView):
     def dropEvent(self, event):
         if event.mimeData().hasFormat(NODE_TYPE_MIME):
             payload = json.loads(bytes(event.mimeData().data(NODE_TYPE_MIME)).decode("utf-8"))
+            node_type = payload["node_type"]
             drop_pos = event.position().toPoint() if hasattr(event, "position") else event.pos()
-            scene_pos = self.mapToScene(drop_pos) - QPointF(NODE_WIDTH / 2, NODE_HEADER / 2)
-            self.scene().add_node(payload["node_type"], scene_pos, props=payload.get("props"))
+            raw_scene_pos = self.mapToScene(drop_pos)
+            centered_scene_pos = raw_scene_pos - QPointF(NODE_WIDTH / 2, NODE_HEADER / 2)
+            scene = self.scene()
+            conn_item = scene.connection_at(raw_scene_pos)
+            if conn_item is not None and node_type == "log":
+                # Log dropped on a wire taps it in place - the wire's own routing is
+                # completely untouched, unlike splicing a real node inline.
+                self._attach_tap(conn_item)
+            elif conn_item is not None and is_spliceable(node_type):
+                scene.splice_node_onto_connection(node_type, payload.get("props"), conn_item, centered_scene_pos)
+            else:
+                scene.add_node(node_type, centered_scene_pos, props=payload.get("props"))
             event.acceptProposedAction()
         else:
             super().dropEvent(event)
+
+    def _attach_tap(self, conn_item: ConnectionItem) -> None:
+        text, ok = QInputDialog.getText(
+            self,
+            "Log Tap",
+            "Message to log whenever this wire fires (use $variable_name):",
+            text=conn_item.log_message,
+        )
+        if not ok:
+            return
+        text = text.strip()
+        scene = self.scene()
+        conn = scene.graph.connections.get(conn_item.conn_id)
+        if conn is not None:
+            conn.log_message = text
+        conn_item.set_tap_message(text)
 
     def reset_view(self) -> None:
         """Pan and zoom back to a default framing of the whole graph ("Home")."""

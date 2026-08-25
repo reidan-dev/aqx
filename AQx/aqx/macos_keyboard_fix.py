@@ -1,5 +1,9 @@
 """
-Works around a crash in pynput 1.8.2's macOS keyboard backend.
+Works around two separate bugs in pynput 1.8.2's macOS backend. Both fixes must be
+applied once, early, before any keyboard/mouse Listener or Controller is created
+anywhere in the app - see each function's own docstring for why.
+
+=== Bug 1: a TSM crash (prime_macos_keyboard_listener) ===
 
 Two separate call sites both query Carbon/HIToolbox Text Services Manager APIs
 (TISCopyCurrentKeyboardInputSource / TISGetInputSourceProperty) to build a
@@ -32,6 +36,7 @@ import sys
 import threading
 
 _primed = False
+_tap_patched = False
 _lock = threading.Lock()
 
 
@@ -68,3 +73,49 @@ def prime_macos_keyboard_listener() -> None:
         _pynput_util_darwin.keycode_context = cached_keycode_context
         _pynput_kb_darwin.keycode_context = cached_keycode_context
         _primed = True
+
+
+def patch_event_tap_auto_reenable() -> None:
+    """=== Bug 2: the event tap silently going deaf after a while ===
+
+    macOS automatically disables a CGEventTap (delivering a callback with event
+    type kCGEventTapDisabledByTimeout, or more rarely kCGEventTapDisabledByUserInput)
+    any time its callback is too slow to respond even once - which can happen in
+    perfectly normal operation over a long-running session (a GC pause, the Qt main
+    thread being briefly busy, system load, etc.), not just under actual failure.
+    Apple's docs for CGEventTapCallBack say the fix is simple: call
+    CGEventTapEnable(proxy, true) using the `proxy` argument the callback receives
+    for that special event type. pynput 1.8.2's darwin ListenerMixin._handler (shared
+    by both keyboard.Listener and mouse.Listener) never checks for this event type at
+    all, so once it happens the listener thread keeps running and looks perfectly
+    healthy, but silently stops delivering every future event - forever, until the
+    process restarts. This is why AQx's global hotkey can work fine right after
+    launch and then stop responding after a while with no error anywhere.
+
+    Must run before any Listener is constructed: CGEventTapCreate() is handed a
+    bound `self._handler` reference at tap-creation time, so a listener created
+    before this patch is applied keeps using the original (unpatched) method for its
+    entire lifetime - patching the class afterward wouldn't reach it."""
+    global _tap_patched
+    if sys.platform != "darwin" or _tap_patched:
+        return
+    with _lock:
+        if _tap_patched:
+            return
+        try:
+            from pynput._util import darwin as _pynput_util_darwin
+            import Quartz
+        except ImportError:
+            return
+
+        original_handler = _pynput_util_darwin.ListenerMixin._handler
+        disabled_types = (Quartz.kCGEventTapDisabledByTimeout, Quartz.kCGEventTapDisabledByUserInput)
+
+        def patched_handler(self, proxy, event_type, event, refcon):
+            if event_type in disabled_types:
+                Quartz.CGEventTapEnable(proxy, True)
+                return None
+            return original_handler(self, proxy, event_type, event, refcon)
+
+        _pynput_util_darwin.ListenerMixin._handler = patched_handler
+        _tap_patched = True

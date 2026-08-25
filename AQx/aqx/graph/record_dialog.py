@@ -4,6 +4,7 @@ import json
 from typing import Optional
 
 from PySide6.QtCore import QObject, Qt, QTimer, Signal
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -23,6 +24,8 @@ from ..emergency import GlobalEmergencyStop
 from ..overlay import CountdownOverlay
 from ..paths import RECORDINGS_DIR
 from ..recording.recorder import Recorder
+from .icons import eye_icon
+from .recording_visualizer import RecordingVisualizerDialog
 
 
 class _RecorderBridge(QObject):
@@ -68,9 +71,19 @@ class RecordBlockDialog(QDialog):
         layout = QVBoxLayout(self)
 
         layout.addWidget(QLabel("Recording:"))
+        combo_row = QHBoxLayout()
         self.combo = QComboBox()
         self._reload_names(select=recording)
-        layout.addWidget(self.combo)
+        combo_row.addWidget(self.combo, 1)
+        self.visualize_btn = QPushButton()
+        self.visualize_btn.setIcon(eye_icon(QColor("#c7d0dc")))
+        self.visualize_btn.setToolTip("Visualize / edit this recording's mouse path and key events")
+        self.visualize_btn.setFixedWidth(32)
+        self.visualize_btn.clicked.connect(self._open_visualizer)
+        combo_row.addWidget(self.visualize_btn)
+        layout.addLayout(combo_row)
+        self.combo.currentTextChanged.connect(self._update_visualize_enabled)
+        self._update_visualize_enabled()
 
         repeat_row = QHBoxLayout()
         repeat_row.addWidget(QLabel("Repeat (0 = infinite):"))
@@ -118,6 +131,18 @@ class RecordBlockDialog(QDialog):
         self.keyboard_check.setEnabled(not busy)
         self.combo.setEnabled(not busy)
         self.buttons.setEnabled(not busy)
+        self.visualize_btn.setEnabled(not busy and bool(self.combo.currentText().strip()))
+
+    def _update_visualize_enabled(self) -> None:
+        name = self.combo.currentText().strip()
+        self.visualize_btn.setEnabled(bool(name) and (RECORDINGS_DIR / f"{name}.json").exists())
+
+    def _open_visualizer(self) -> None:
+        name = self.combo.currentText().strip()
+        if not name:
+            return
+        dlg = RecordingVisualizerDialog(self, name)
+        dlg.exec()
 
     def _start_recording(self) -> None:
         if not (self.mouse_check.isChecked() or self.keyboard_check.isChecked()):
@@ -166,12 +191,24 @@ class RecordBlockDialog(QDialog):
         if not events:
             QMessageBox.information(self, "AQx", "No input captured.")
             return
-        # global_stop stays paused through this - it's a QLineEdit dialog, and typing
-        # into it is exactly what reproduces the crash if the listener is active.
-        name, ok = QInputDialog.getText(self, "Save Recording", "Name:")
+        # Defaults to whatever was selected before recording started, so re-recording
+        # to just replace it is one Enter press away - type a different name instead
+        # to save as a separate recording. global_stop stays paused through this -
+        # it's a QLineEdit dialog, and typing into it is exactly what reproduces the
+        # crash if the listener is active.
+        previously_selected = self.combo.currentText().strip()
+        name, ok = QInputDialog.getText(
+            self, "Save Recording", "Name (same name replaces it):", text=previously_selected
+        )
         if not ok or not name.strip():
             return
         name = name.strip()
+        if name != previously_selected and (RECORDINGS_DIR / f"{name}.json").exists():
+            reply = QMessageBox.question(
+                self, "AQx", f"A recording named '{name}' already exists. Replace it?"
+            )
+            if reply != QMessageBox.Yes:
+                return
         self._save_recording(name, events)
         self._reload_names(select=name)
 
