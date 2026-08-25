@@ -1,9 +1,40 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+import re
+from typing import Any, Dict, List, Optional
 
 from .conditions import describe_condition
 from .model import Node, Port
+
+DURATION_RE = re.compile(r"^\s*(?:(\d+)\s*[hH])?\s*(?:(\d+)\s*[mM])?\s*$")
+
+
+def parse_duration_seconds(text: str) -> Optional[int]:
+    """Parses a duration like "4h", "2m", or "3h30m" into total seconds. Hours and
+    minutes are each optional but at least one must be present, and hours (if any)
+    must come before minutes. Returns None for anything that doesn't match (empty
+    string, garbage, minutes-before-hours, etc.)."""
+    if not text or not text.strip():
+        return None
+    m = DURATION_RE.match(text)
+    if not m or (m.group(1) is None and m.group(2) is None):
+        return None
+    hours = int(m.group(1) or 0)
+    minutes = int(m.group(2) or 0)
+    return hours * 3600 + minutes * 60
+
+
+def format_duration_seconds(seconds: float) -> str:
+    """The inverse of parse_duration_seconds, for status messages - always shows
+    both parts once there's more than an hour, drops the hours part otherwise."""
+    seconds = max(0, int(seconds))
+    hours, remainder = divmod(seconds, 3600)
+    minutes = remainder // 60
+    if hours and minutes:
+        return f"{hours}h{minutes}m"
+    if hours:
+        return f"{hours}h"
+    return f"{minutes}m"
 
 
 def default_condition() -> dict:
@@ -119,6 +150,43 @@ NODE_SPECS: Dict[str, dict] = {
         "outputs": [Port("out", "exec")],
         "default_props": {"condition": default_condition()},
     },
+    "code": {
+        "label": "Code",
+        "inputs": [Port("in", "exec")],
+        "outputs": [Port("out", "exec")],
+        "default_props": {"code": ""},
+    },
+    "controls": {
+        "label": "Controls",
+        "inputs": [Port("in", "exec")],
+        "outputs": [Port("out", "exec")],
+        # Each entry: {"name": str, "options": [str, ...], "current": str} - "current"
+        # is both the starting value and where the floating control's last pick gets
+        # written back, so it persists across runs once the flow is saved.
+        "default_props": {"controls": []},
+    },
+    "skills": {
+        "label": "Skills",
+        "inputs": [Port("in", "exec")],
+        "outputs": [Port("out", "exec")],
+        # Each entry: {"region": str, "key": str} - region is an OCR region drawn
+        # over just a skill's cooldown number; an empty read means it's off
+        # cooldown, and the block taps `key` for it. Row order is identity - row 1
+        # is skills.s1 in a Code block, row 2 is skills.s2, and so on. Only one
+        # Skills block is allowed per flow (enforced in view.py's add_node), so
+        # that numbering is always unambiguous.
+        "default_props": {"skills": []},
+    },
+    "turn_off": {
+        "label": "Turn Off",
+        "inputs": [Port("in", "exec")],
+        "outputs": [Port("out", "exec")],
+        # duration: e.g. "4h", "2m", "3h30m" - counted from when the run started,
+        # not from when this block is reached. Arms a background timer and
+        # continues to "out" immediately; everything else in the flow keeps
+        # running normally until the timer stops the whole run.
+        "default_props": {"duration": ""},
+    },
 }
 
 LOOP_TYPES = ("for_loop", "while_loop", "until_loop")
@@ -170,6 +238,10 @@ HELP_TEXT: Dict[str, str] = {
     "connector": "A plain junction point - wire something into it, then wire its \"out\" to as many blocks as you like. All of them fire, in order, whenever it's reached. Purely for tidying up wire routing.",
     "logic": "Evaluates an AND/OR/NOT combination of OCR readings, variables, and other Logic blocks, and stores the result. Other blocks (If/While/Until/Exit Loop, or another Logic block) can then use \"Logic block\" as a condition source to reuse that result - this is how you compose logic out of smaller reusable pieces instead of one giant condition.",
     "loop_exit": "Checks a condition; if true, immediately exits its direct parent loop (the nearest enclosing For/While/Until) and continues from that loop's \"done\" port. If false, continues normally to \"out\". Placing it outside any loop is a no-op (logged as a warning).",
+    "code": "Runs Python code you write yourself. Read/write `variables` (the same dict Set Variable/If use), or call `ocr(\"region_name\")`, `play(\"recording_name\", repeat=1)`, `log(*values)`, `sleep(seconds)`, `telegram(message)`, `keystroke(keys, min_wait=0, max_wait=None)` (taps each key in a string/list, waiting after every tap - a fixed min_wait, or a random min_wait-max_wait gap when max_wait is given), and `stop_requested()`. Branch or loop inside the code with normal Python if/while - there's always a single \"out\" once the code finishes. An error is logged with its traceback but doesn't stop the flow.",
+    "controls": "Defines one or more named, multiple-choice values (e.g. \"battle-mode\" -> abc/def/fgh) that show up as dropdowns in the floating control while a flow runs, so you can change them mid-run without touching the graph. Every value here becomes a variable any If/While/Until/Logic condition or Code block can read, same as one set by Set Variable - registered the moment the run starts, regardless of whether this block is wired into the flow. Whatever you pick while running is written back here and saved with the flow, so the next run starts from your last choice.",
+    "skills": "The flow's one Skills block (only one is allowed) - each row watches an OCR region drawn over just a skill's cooldown number, and taps its Key the moment that region reads empty (off cooldown). Reaching this block in the flow checks and presses every row in it, in order. Each row is also identified by its position: row 1 publishes an \"s1_ready\" variable (True/False) any If/While/Until/Logic condition can read, row 2 an \"s2_ready\", and so on. A Code block calls skills() to get a handle exposing skills.s1, skills.s2, ... (one per row, in the same order) - .is_ready() just looks, .press() taps the key if it was ready, .wait_and_press() blocks on that one specific slot until it's off cooldown, and skills.press_ready([skills.s1, skills.s2]) does a priority scan - presses whichever's ready first, skipping ones still on cooldown rather than waiting on them. All of these work regardless of whether this block itself is wired into the flow.",
+    "turn_off": "Arms a timer that stops the whole run once a duration has passed since the run started - e.g. \"4h\" (4 hours), \"2m\" (2 minutes), \"3h30m\" (3 hours 30 minutes). Reaching this block doesn't pause anything - it continues to \"out\" immediately, and everything else in the flow keeps running exactly as normal until the timer fires and stops the run, the same as pressing Stop yourself. Place it once, anywhere reached early (e.g. right after Start) - reaching it again later doesn't restart or add to the timer.",
 }
 
 
@@ -237,4 +309,32 @@ def summary_for(node: Node) -> str:
         return _truncate(f"{describe_condition(node.props.get('condition', default_condition()))}{value_str}", 34)
     if node.type == "loop_exit":
         return _truncate(f"exit if {describe_condition(node.props.get('condition', default_condition()))}", 34)
+    if node.type == "code":
+        code = str(node.props.get("code", "")).strip()
+        if not code:
+            return "(empty)"
+        first_line = next((line.strip() for line in code.splitlines() if line.strip()), "")
+        return _truncate(first_line, 34)
+    if node.type == "controls":
+        entries = node.props.get("controls") or []
+        if not entries:
+            return "(no controls)"
+        parts = [f"{e.get('name', '?')}={e.get('current', '?')}" for e in entries]
+        return _truncate(", ".join(parts), 40)
+    if node.type == "skills":
+        entries = node.props.get("skills") or []
+        if not entries:
+            return "(no skills)"
+        last_state = node.props.get("last_state") or {}
+        parts = []
+        for i, e in enumerate(entries, start=1):
+            name = f"s{i}"
+            state = last_state.get(name)
+            parts.append(f"{name}:{state}" if state else f"{name}->{e.get('key', '?')}")
+        return _truncate(", ".join(parts), 40)
+    if node.type == "turn_off":
+        duration = node.props.get("duration") or ""
+        if parse_duration_seconds(duration) is None:
+            return "(no duration)" if not duration.strip() else f"'{duration}' (invalid)"
+        return f"stop after {duration}"
     return ""

@@ -9,6 +9,17 @@ from pynput import keyboard, mouse
 from .events import InputEvent
 
 
+def key_from_name(name: str):
+    """Resolves a recorded/scripted key name to a pynput key: "vk_<n>" for a raw
+    virtual keycode, a pynput Key attribute name (e.g. "enter", "cmd", "tab") for a
+    special/modifier key, or otherwise a literal single character."""
+    if name.startswith("vk_"):
+        return keyboard.KeyCode(vk=int(name[3:]))
+    if hasattr(keyboard.Key, name):
+        return getattr(keyboard.Key, name)
+    return keyboard.KeyCode.from_char(name)
+
+
 class StopFlag:
     """A thread-safe flag shared between the UI, the recorder, and playback/graph execution."""
 
@@ -48,11 +59,7 @@ class Player:
         self._keyboard = keyboard.Controller()
 
     def _key_from_name(self, name: str):
-        if name.startswith("vk_"):
-            return keyboard.KeyCode(vk=int(name[3:]))
-        if hasattr(keyboard.Key, name):
-            return getattr(keyboard.Key, name)
-        return keyboard.KeyCode.from_char(name)
+        return key_from_name(name)
 
     def _apply(self, ev: InputEvent) -> None:
         if ev.type == "mouse_move":

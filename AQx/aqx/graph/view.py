@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QInputDialog,
     QListWidget,
     QMenu,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
@@ -58,6 +59,10 @@ NODE_COLORS = {
     "connector": {"header": QColor("#2d2d2d"), "border": QColor("#9aa4b2"), "selected": QColor("#e6e6e6")},
     "logic": {"header": QColor("#1f3a4d"), "border": QColor("#4fb8d1"), "selected": QColor("#8fe4ff")},
     "loop_exit": {"header": QColor("#4d1717"), "border": QColor("#d13f3f"), "selected": QColor("#ff7f7f")},
+    "code": {"header": QColor("#2a2a3d"), "border": QColor("#7a7fd1"), "selected": QColor("#a8acff")},
+    "controls": {"header": QColor("#4d3d17"), "border": QColor("#d1a13f"), "selected": QColor("#ffcf6f")},
+    "skills": {"header": QColor("#4d1f3a"), "border": QColor("#d13f9e"), "selected": QColor("#ff8ad3")},
+    "turn_off": {"header": QColor("#2d1717"), "border": QColor("#8a4a4a"), "selected": QColor("#c47f7f")},
     "_default": {"header": QColor("#1f2329"), "border": QColor("#4a4f58"), "selected": QColor("#4fa3ff")},
 }
 CONNECTOR_WIDTH = 56
@@ -457,7 +462,15 @@ class GraphScene(QGraphicsScene):
         self.addItem(item)
         self.conn_items[conn.id] = item
 
-    def add_node(self, node_type: str, pos: QPointF, props: Optional[dict] = None) -> Node:
+    def add_node(self, node_type: str, pos: QPointF, props: Optional[dict] = None) -> Optional[Node]:
+        # Only one Skills block is allowed per flow - skills.s1/.s2/... (see
+        # runner.py's SkillsHandle) are numbered by that one block's own row
+        # order, which would be ambiguous with a second block in the picture.
+        if node_type == "skills" and any(n.type == "skills" for n in self.graph.nodes.values()):
+            QMessageBox.warning(
+                None, "AQx", "Only one Skills block is allowed per flow - it's already on the canvas."
+            )
+            return None
         node = make_node(node_type, new_id(), pos.x(), pos.y(), props=props)
         self.graph.add_node(node)
         self._add_node_item(node)
@@ -470,7 +483,7 @@ class GraphScene(QGraphicsScene):
 
     def splice_node_onto_connection(
         self, node_type: str, props: Optional[dict], conn_item: ConnectionItem, pos: QPointF
-    ) -> Node:
+    ) -> Optional[Node]:
         """Drops a single-in/single-out node directly onto an existing wire,
         auto-rewiring A -> new -> B in place of A -> B. This is the safe way to tap a
         Log (or Delay, Set Variable, Connector...) onto an existing chain - hand-
@@ -485,9 +498,15 @@ class GraphScene(QGraphicsScene):
         to_node_id = target.node_item.node.id
         to_port_name = target.name
 
+        # Created (or rejected - e.g. a second Skills block) before the existing
+        # wire is touched, so a rejection leaves the original connection intact
+        # instead of destroying it with nothing to replace it.
+        new_node = self.add_node(node_type, pos, props=props)
+        if new_node is None:
+            return None
+
         self._remove_connection_item(conn_item.conn_id)
 
-        new_node = self.add_node(node_type, pos, props=props)
         new_in_port = new_node.inputs[0].name
         new_out_port = new_node.outputs[0].name
 

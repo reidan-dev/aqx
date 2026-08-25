@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QListWidgetItem,
     QMainWindow,
+    QMessageBox,
     QPlainTextEdit,
     QSpinBox,
     QStatusBar,
@@ -31,15 +32,18 @@ from ..emergency import GlobalEmergencyStop
 from ..overlay import CountdownOverlay
 from ..paths import FLOWS_DIR, RECORDINGS_DIR
 from ..recording.player import PauseFlag, StopFlag
+from .code_dialog import CodeDialog
 from .connector_dialog import ConnectorDialog
+from .controls_dialog import ControlsDialog
 from .custom_blocks import list_custom_blocks
+from .skills_dialog import SkillsDialog
 from .condition_editor import SimpleConditionDialog
 from .icons import INACTIVE_COLOR, PAUSE_COLOR, PLAY_COLOR, STOP_COLOR, pause_bars_icon, square_icon, triangle_icon
 from .if_dialog import IfDialog
 from .loop_dialog import LoopDialog
 from .mini_toolbar import MiniRunToolbar
 from .model import Graph
-from .nodes import HELP_TEXT, NODE_SPECS, LOOP_TYPES, label_for
+from .nodes import HELP_TEXT, NODE_SPECS, LOOP_TYPES, label_for, parse_duration_seconds
 from .ocr_dialog import OCRNodeDialog
 from .record_dialog import RecordBlockDialog
 from .runner import GraphRunner
@@ -96,6 +100,7 @@ class GraphEditorWindow(QMainWindow):
         self.mini_toolbar.stop_clicked.connect(self._stop)
         self.mini_toolbar.maximize_clicked.connect(self._restore_from_mini)
         self.mini_toolbar.settings_clicked.connect(self._open_settings)
+        self.mini_toolbar.control_value_changed.connect(self._on_control_value_changed)
 
         self.run_overlay = CountdownOverlay()
         self._run_countdown_timer = QTimer(self)
@@ -493,6 +498,48 @@ class GraphEditorWindow(QMainWindow):
             )
             if dlg.exec() == QDialog.Accepted:
                 dlg.apply_to_node()
+        elif node.type == "code":
+            dlg = CodeDialog(self, self.graph, node)
+            if dlg.exec() == QDialog.Accepted:
+                dlg.apply_to_node()
+        elif node.type == "controls":
+            dlg = ControlsDialog(self, node)
+            if dlg.exec() == QDialog.Accepted:
+                dlg.apply_to_node()
+        elif node.type == "skills":
+            # Non-modal for the same reason as the OCR node's dialog - it can launch
+            # RegionPicker, and a modal QDialog on macOS blocks the picker's own
+            # toolbar clicks. Kept alive on self so it isn't garbage-collected while
+            # still open.
+            dlg = SkillsDialog(self, node)
+            self._active_skills_dialog = dlg
+
+            def on_finished(result, node=node, dlg=dlg):
+                if result == QDialog.Accepted:
+                    dlg.apply_to_node()
+                item = self.scene.node_items.get(node.id)
+                if item is not None:
+                    item.refresh_summary()
+
+            dlg.finished.connect(on_finished)
+            dlg.show()
+            return
+        elif node.type == "turn_off":
+            current = str(node.props.get("duration", ""))
+            while True:
+                val, ok = QInputDialog.getText(
+                    self, "Turn Off", "Stop the run after (e.g. 4h, 2m, 3h30m):", text=current
+                )
+                if not ok:
+                    break
+                if val.strip() and parse_duration_seconds(val) is None:
+                    QMessageBox.warning(
+                        self, "AQx", f"'{val}' isn't a valid duration - use a form like 4h, 2m, or 3h30m."
+                    )
+                    current = val
+                    continue
+                node.props["duration"] = val
+                break
 
         item = self.scene.node_items.get(node_id)
         if item is not None:
@@ -672,6 +719,7 @@ class GraphEditorWindow(QMainWindow):
         self.runner.node_started.connect(self._highlight_node, Qt.QueuedConnection)
         self.runner.node_updated.connect(self._refresh_node_summary, Qt.QueuedConnection)
         self.runner.finished.connect(self._on_run_finished, Qt.QueuedConnection)
+        self.runner.controls_registered.connect(self._on_controls_registered, Qt.QueuedConnection)
         self._log("Run started.")
         thread = threading.Thread(target=self.runner.run, daemon=True)
         thread.start()
@@ -682,6 +730,19 @@ class GraphEditorWindow(QMainWindow):
 
     def _on_run_finished(self) -> None:
         self._set_running_state(False)
+        self.mini_toolbar.set_controls([])
+
+    def _on_controls_registered(self, controls: list) -> None:
+        self.mini_toolbar.set_controls(controls)
+        # A Controls block's own face shows its values too, same as any other node.
+        for node in self.graph.nodes.values():
+            if node.type == "controls":
+                self._refresh_node_summary(node.id)
+
+    def _on_control_value_changed(self, name: str, value: str) -> None:
+        runner = getattr(self, "runner", None)
+        if runner is not None:
+            runner.set_control_value(name, value)
 
     def _stop(self) -> None:
         self.stop_flag.set()

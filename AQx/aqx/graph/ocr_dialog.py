@@ -93,6 +93,15 @@ class OCRNodeDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
+    def closeEvent(self, event) -> None:
+        # Closing the window (the titlebar's close button, or Escape) goes through
+        # here, not through accept()/reject() - by default that would discard
+        # whatever's been edited, same as Cancel. Treat it as OK instead, since the
+        # region itself is already saved to disk regardless; only the explicit
+        # Cancel button should actually discard.
+        self.accept()
+        super().closeEvent(event)
+
     def _reload_regions(self, select: str = "") -> None:
         names = Region.list_names()
         self.combo.clear()
