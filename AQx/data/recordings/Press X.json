@@ -1,0 +1,20 @@
+{
+  "name": "Press X",
+  "mode": {
+    "mouse": false,
+    "keyboard": true
+  },
+  "duration": 0.4588300420437008,
+  "events": [
+    {
+      "type": "key_down",
+      "t": 0.3499442500760779,
+      "key": "x"
+    },
+    {
+      "type": "key_up",
+      "t": 0.4588300420437008,
+      "key": "x"
+    }
+  ]
+}

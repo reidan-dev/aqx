@@ -1,0 +1,39 @@
+{
+  "name": "SkillsOCR",
+  "base_type": "skills",
+  "props": {
+    "skills": [
+      {
+        "region": "skill-1",
+        "key": "1"
+      },
+      {
+        "region": "skill-2",
+        "key": "2"
+      },
+      {
+        "region": "skill-3",
+        "key": "3"
+      },
+      {
+        "region": "skill-4",
+        "key": "4"
+      },
+      {
+        "region": "skill-5",
+        "key": "5"
+      },
+      {
+        "region": "skill-6",
+        "key": "6"
+      }
+    ],
+    "last_state": {
+      "s4": "ready",
+      "s3": "cooldown",
+      "s2": "cooldown",
+      "s5": "ready",
+      "s1": "cooldown"
+    }
+  }
+}

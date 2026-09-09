@@ -1,0 +1,9 @@
+{
+  "name": "DOT Farm Combo",
+  "base_type": "recorded_block",
+  "props": {
+    "recording": "DOT Combo",
+    "repeat": 1,
+    "speed": 1.0
+  }
+}

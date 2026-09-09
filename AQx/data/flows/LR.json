@@ -1,0 +1,242 @@
+{
+  "version": 1,
+  "repeat": 0,
+  "nodes": [
+    {
+      "id": "d6687b8d",
+      "type": "start",
+      "x": -387.65654261987765,
+      "y": 69.56404889549198,
+      "props": {}
+    },
+    {
+      "id": "09edae57",
+      "type": "recorded_block",
+      "x": 98.24731600278058,
+      "y": -73.43052078905072,
+      "props": {
+        "recording": "CSH SPAM 4",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "9cbc9c8b",
+      "type": "skills",
+      "x": -173.58952550274734,
+      "y": -91.91458690301408,
+      "props": {
+        "skills": [
+          {
+            "region": "skill-1",
+            "key": "1"
+          },
+          {
+            "region": "skill-2",
+            "key": "2"
+          },
+          {
+            "region": "skill-3",
+            "key": "3"
+          },
+          {
+            "region": "skill-4",
+            "key": "4"
+          },
+          {
+            "region": "skill-5",
+            "key": "5"
+          },
+          {
+            "region": "skill-6",
+            "key": "6"
+          }
+        ],
+        "last_state": {
+          "s4": "cooldown",
+          "s3": "ready",
+          "s2": "cooldown",
+          "s5": "ready",
+          "s1": "cooldown"
+        }
+      }
+    },
+    {
+      "id": "7552cab7",
+      "type": "code",
+      "x": 239.37386162960277,
+      "y": 91.08298307719986,
+      "props": {
+        "setup_code": "## Legion Token Farming!\n## Quest Box Open By Default\nitem_goal = 0\nMULTIPLIER = 1\n",
+        "functions_code": "def get_items_count(val=None):\n    list_of_items = [int(item) for item in ocr_lines(\"Items\", \"(\\d+)\")]\n    log(list_of_items)\n    if val is not None:\n        val -= 1\n        return list_of_items[val]\n    return list_of_items\n\n\ndef get_quest_items(required_cnt, current_cnt_fn, attack_steps, next_steps):\n    total_required_cnt = required_cnt * MULTIPLIER\n    while True:\n        current_cnt = current_cnt_fn()\n        log(f\"{current_cnt}/{total_required_cnt}\")\n        if current_cnt == total_required_cnt:\n            for next_step in next_steps:\n                next_step()\n            break\n\n        sleep(1)\n        for attack_step in attack_steps:\n            attack_step()\n",
+        "code": "get_quest_items(\n    1,\n    lambda: get_items_count(1),\n    [lambda: play(\"CSH SPAM 4\")],\n    [lambda: play(\"Turn In Legion Token II\")],\n)\n# telegram(f\"Adding Legion Token +10!\")\n",
+        "sync_vars": {
+          "item_goal": 45
+        }
+      }
+    },
+    {
+      "id": "41018e0e",
+      "type": "ocr",
+      "x": -215.01981764315732,
+      "y": -177.94845396273493,
+      "props": {
+        "region": "Items",
+        "interval_seconds": 0.1,
+        "extract_pattern": "",
+        "last_value": null
+      }
+    },
+    {
+      "id": "9aa25212",
+      "type": "recorded_block",
+      "x": 56.94897626645411,
+      "y": 155.72685043775238,
+      "props": {
+        "recording": "Turn In Legion Token",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "9ab14383",
+      "type": "recorded_block",
+      "x": 236.51266806671623,
+      "y": 14.745005953966153,
+      "props": {
+        "recording": "Turn In Legion Token II",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "2dcd0fa9",
+      "type": "code",
+      "x": 242.23871592367402,
+      "y": 181.24030725637945,
+      "props": {
+        "setup_code": "## Legion Token \n## Use CSH\nitem_goal = 0\nMULTIPLIER = 5\n",
+        "functions_code": "def get_items_count(val=None):\n    list_of_items = [int(item) for item in ocr_lines(\"Items\", \"(\\d+)\")]\n    log(list_of_items)\n    if val is not None:\n        val -= 1\n        return list_of_items[val]\n    return list_of_items\n\n\ndef get_quest_items(required_cnt, current_cnt_fn, attack_steps, next_steps):\n    total_required_cnt = required_cnt * MULTIPLIER\n    while True:\n        current_cnt = current_cnt_fn()\n        log(f\"{current_cnt}/{total_required_cnt}\")\n        if current_cnt == total_required_cnt:\n            for next_step in next_steps:\n                next_step()\n            break\n\n        sleep(1)\n        for attack_step in attack_steps:\n            attack_step()\n",
+        "code": "get_quest_items(\n    10,\n    lambda: get_items_count(1),\n    [lambda: play(\"CSH SPAM 4\")],\n    [],\n)\n\nget_quest_items(\n    10,\n    lambda: get_items_count(2),\n    [lambda: play(\"CSH SPAM 4\")],\n    [],\n)\nget_quest_items(\n    10,\n    lambda: get_items_count(3),\n    [lambda: play(\"CSH SPAM 4\")],\n    [],\n)\n\nplay(\"Turn In Legion Token\")\ntelegram(f\"Legion Token +250!\")\n",
+        "sync_vars": {
+          "item_goal": 45
+        }
+      }
+    },
+    {
+      "id": "060df730",
+      "type": "recorded_block",
+      "x": 258.488567036954,
+      "y": -138.03973144595028,
+      "props": {
+        "recording": "DOT Combo",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "86e02e87",
+      "type": "code",
+      "x": -168.86137012602654,
+      "y": 52.739162129885386,
+      "props": {
+        "setup_code": "## Legion Token Farming\nitem_goal = 0\nMULTIPLIER = 5\n\ns = skills()\n",
+        "functions_code": "def get_hp():\n    return int(ocr(\"MyHP\"))\n\ndef has_enemy():\n\tplay(\"Find Enemy\")\n\tplay(\"Find Enemy\")\n\treturn ocr(\"Enemy Name\") is not None\n\nis_dead = lambda: ocr(\"DeathMessage\") == \"DEATH\"\non_position = False",
+        "code": "items = ocr_lines(\"Items\", \"(\\d+)\")\nitem = int(items[1])\n\n\nwhile not has_enemy():\n\tplay(\"MoveToPosition\")\n\tsleep(1)\n\n\nplay(\"DOT Combo\")\n\nif item % 100 in range(6):\n\ttelegram(f\"Tethered Essence: {item}/6000\")",
+        "sync_vars": {
+          "item_goal": 45
+        }
+      }
+    },
+    {
+      "id": "ba5afec5",
+      "type": "recorded_block",
+      "x": 266.51266806671623,
+      "y": 44.74500595396616,
+      "props": {
+        "recording": "CSH Spam + Skill 3",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "d661ce14",
+      "type": "recorded_block",
+      "x": 288.488567036954,
+      "y": -108.03973144595028,
+      "props": {
+        "recording": "DOT: 33343332",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "5de67676",
+      "type": "ocr",
+      "x": -59.6933307989527,
+      "y": -182.3518032925166,
+      "props": {
+        "region": "MyHP",
+        "interval_seconds": 0.1,
+        "extract_pattern": "",
+        "last_value": null
+      }
+    },
+    {
+      "id": "ffa569f1",
+      "type": "ocr",
+      "x": 50.37833243731858,
+      "y": -240.1723371645561,
+      "props": {
+        "region": "DeathMessage",
+        "interval_seconds": 0.1,
+        "extract_pattern": "",
+        "last_value": null
+      }
+    },
+    {
+      "id": "f11f727d",
+      "type": "recorded_block",
+      "x": 296.5334335689441,
+      "y": -229.14270884342994,
+      "props": {
+        "recording": "MoveToPosition",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "61700fa8",
+      "type": "recorded_block",
+      "x": 196.0941112001796,
+      "y": -332.1649880907838,
+      "props": {
+        "recording": "Find Enemy",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "70289f2f",
+      "type": "ocr",
+      "x": -163.71109258937935,
+      "y": -321.2394829439001,
+      "props": {
+        "region": "Enemy Name",
+        "interval_seconds": 0.1,
+        "extract_pattern": "",
+        "last_value": null
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "3a624929",
+      "from_node": "d6687b8d",
+      "from_port": "out",
+      "to_node": "86e02e87",
+      "to_port": "in",
+      "log_message": ""
+    }
+  ]
+}

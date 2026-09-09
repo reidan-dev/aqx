@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "repeat": 0,
+  "nodes": [
+    {
+      "id": "a39c18e4",
+      "type": "start",
+      "x": -212.9667448812308,
+      "y": 40.83763822808355,
+      "props": {}
+    },
+    {
+      "id": "ef7f5845",
+      "type": "skills",
+      "x": -181.3800549666103,
+      "y": -99.11437572068878,
+      "props": {
+        "skills": [
+          {
+            "region": "skill-1",
+            "key": "1"
+          },
+          {
+            "region": "skill-2",
+            "key": "2"
+          },
+          {
+            "region": "skill-3",
+            "key": "3"
+          },
+          {
+            "region": "skill-4",
+            "key": "4"
+          },
+          {
+            "region": "skill-5",
+            "key": "5"
+          },
+          {
+            "region": "skill-6",
+            "key": "6"
+          }
+        ],
+        "last_state": {
+          "s4": "ready",
+          "s3": "cooldown",
+          "s2": "cooldown",
+          "s5": "ready",
+          "s1": "cooldown"
+        }
+      }
+    },
+    {
+      "id": "937f317b",
+      "type": "recorded_block",
+      "x": -1.2878359286479721,
+      "y": -75.66050533434947,
+      "props": {
+        "recording": "BludrutBrawl - Rotation",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "58b0f80a",
+      "type": "code",
+      "x": -1.2878359286479828,
+      "y": 58.36161115901781,
+      "props": {
+        "code": "play(\"BludrutBrawl - Rotation\")\ntelegram(\"Bludrut Brawl +1\")\nsleep(1)\n"
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "062d25ee",
+      "from_node": "a39c18e4",
+      "from_port": "out",
+      "to_node": "58b0f80a",
+      "to_port": "in",
+      "log_message": ""
+    }
+  ]
+}

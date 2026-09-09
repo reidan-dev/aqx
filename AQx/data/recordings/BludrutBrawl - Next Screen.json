@@ -1,0 +1,24 @@
+{
+  "name": "BludrutBrawl - Next Screen",
+  "mode": {
+    "mouse": true,
+    "keyboard": false
+  },
+  "duration": 0.26421883300645277,
+  "events": [
+    {
+      "type": "mouse_down",
+      "t": 0.2599737079581246,
+      "x": 1283.8515625,
+      "y": 462.22265625,
+      "button": "left"
+    },
+    {
+      "type": "mouse_up",
+      "t": 0.26421883300645277,
+      "x": 1283.8515625,
+      "y": 462.22265625,
+      "button": "left"
+    }
+  ]
+}

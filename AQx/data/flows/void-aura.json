@@ -1,0 +1,168 @@
+{
+  "version": 1,
+  "repeat": 0,
+  "nodes": [
+    {
+      "id": "a8a1225e",
+      "type": "start",
+      "x": -64.50448184772135,
+      "y": 90.417775097828,
+      "props": {}
+    },
+    {
+      "id": "ee9beeb5",
+      "type": "skills",
+      "x": -71.91415319553792,
+      "y": 3.6238788294088775,
+      "props": {
+        "skills": [
+          {
+            "region": "skill-1",
+            "key": "1"
+          },
+          {
+            "region": "skill-2",
+            "key": "2"
+          },
+          {
+            "region": "skill-3",
+            "key": "3"
+          },
+          {
+            "region": "skill-4",
+            "key": "4"
+          },
+          {
+            "region": "skill-5",
+            "key": "5"
+          },
+          {
+            "region": "skill-6",
+            "key": "6"
+          }
+        ],
+        "last_state": {
+          "s4": "ready",
+          "s3": "cooldown",
+          "s2": "cooldown",
+          "s5": "ready",
+          "s1": "cooldown"
+        }
+      }
+    },
+    {
+      "id": "814c3534",
+      "type": "recorded_block",
+      "x": 166.12298529469888,
+      "y": -155.49390240288966,
+      "props": {
+        "recording": "GoToShadowRealmPast",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "4422aa36",
+      "type": "ocr",
+      "x": -69.14574424063832,
+      "y": -89.5688888115422,
+      "props": {
+        "region": "",
+        "interval_seconds": 5.0,
+        "extract_pattern": "",
+        "last_value": null
+      }
+    },
+    {
+      "id": "44f4f658",
+      "type": "recorded_block",
+      "x": 169.8879915374548,
+      "y": -81.97645441082851,
+      "props": {
+        "recording": "GoToShadowLord2",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "0c6ac43d",
+      "type": "recorded_block",
+      "x": 453.3335331868988,
+      "y": 56.1439185418875,
+      "props": {
+        "recording": "GoToBattleUnderB",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "d8430a59",
+      "type": "recorded_block",
+      "x": 454.8040246887744,
+      "y": -15.66503138305821,
+      "props": {
+        "recording": "CSH SPAM 4",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "cd96d6d2",
+      "type": "recorded_block",
+      "x": 359.8579415779491,
+      "y": -128.42022425399256,
+      "props": {
+        "recording": "Turn In Quest",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "e10225ca",
+      "type": "code",
+      "x": 119.70267540941543,
+      "y": 137.08662002778092,
+      "props": {
+        "setup_code": "item_goal = 0\nMULTIPLIER = 19\n",
+        "functions_code": "def get_items_count(val=None):\n    list_of_items = [int(item) for item in ocr_lines(\"Items\", \"(\\d+)\")]\n    log(list_of_items)\n    if val is not None:\n        val -= 1\n        return list_of_items[val]\n    return list_of_items\n\n\ndef get_quest_items(\n    required_cnt, current_cnt_fn, attack_steps, next_steps, additional_cond=True\n):\n    total_required_cnt = required_cnt * MULTIPLIER\n    while True:\n        current_cnt = current_cnt_fn()\n        log(f\"{current_cnt}/{total_required_cnt} :: {additional_cond}\")\n        if (current_cnt >= total_required_cnt) and additional_cond:\n            for next_step in next_steps:\n                next_step()\n            break\n\n        sleep(1)\n        for attack_step in attack_steps:\n            attack_step()\n",
+        "code": "get_quest_items(\n    50,\n    lambda: get_items_count(1),\n    [lambda: play(\"CSH SPAM 4\")],\n    [\n        lambda: sleep(0.5),\n        lambda: play(\"GoToShadowLord2\"),\n    ],\n)\n\nget_quest_items(\n    3,\n    lambda: get_items_count(2),\n    [\n        lambda: play(\"CSH Combo\"),\n        lambda: sleep(1),\n    ],\n    [\n        lambda: sleep(1),\n        lambda: play(\"GoToShadowRealmPast\"),\n        lambda: sleep(0.5),\n        lambda: play(\"Turn In Quest\"),\n    ],\n    ocr(\"MonsterName\") is None,\n)\n\nitem_goal += MULTIPLIER\ntelegram(f\"VOID AURA + ~100\")\n",
+        "sync_vars": {
+          "item_goal": 45
+        }
+      }
+    },
+    {
+      "id": "7cef37ac",
+      "type": "recorded_block",
+      "x": 495.92989185502677,
+      "y": -93.58594289570563,
+      "props": {
+        "recording": "CSH Combo",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "9eb49d13",
+      "type": "ocr",
+      "x": -70.19918789251636,
+      "y": -183.7826634190543,
+      "props": {
+        "region": "MonsterName",
+        "interval_seconds": 5.0,
+        "extract_pattern": "",
+        "last_value": null
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "d609eb8b",
+      "from_node": "a8a1225e",
+      "from_port": "out",
+      "to_node": "e10225ca",
+      "to_port": "in",
+      "log_message": ""
+    }
+  ]
+}

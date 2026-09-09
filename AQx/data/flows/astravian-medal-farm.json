@@ -1,0 +1,236 @@
+{
+  "version": 1,
+  "repeat": 0,
+  "nodes": [
+    {
+      "id": "dff8aa03",
+      "type": "start",
+      "x": -163.16961619211926,
+      "y": 161.90801569177734,
+      "props": {}
+    },
+    {
+      "id": "49f863c3",
+      "type": "skills",
+      "x": -212.4641714997449,
+      "y": -117.34980943021225,
+      "props": {
+        "skills": [
+          {
+            "region": "skill-1",
+            "key": "1"
+          },
+          {
+            "region": "skill-2",
+            "key": "2"
+          },
+          {
+            "region": "skill-3",
+            "key": "3"
+          },
+          {
+            "region": "skill-4",
+            "key": "4"
+          },
+          {
+            "region": "skill-5",
+            "key": "5"
+          },
+          {
+            "region": "skill-6",
+            "key": "6"
+          }
+        ],
+        "last_state": {
+          "s4": "ready",
+          "s3": "cooldown",
+          "s2": "cooldown",
+          "s5": "ready",
+          "s1": "cooldown"
+        }
+      }
+    },
+    {
+      "id": "9df75b82",
+      "type": "code",
+      "x": 28.07799002343927,
+      "y": 259.0411805492198,
+      "props": {
+        "setup_code": "item_goal = 0\nMULTIPLIER = 6\n",
+        "functions_code": "def get_items_count(val=None):\n    list_of_items = [int(item) for item in ocr_lines(\"Items\", \"(\\d+)\")]\n    log(list_of_items)\n    if val is not None:\n        val -= 1\n        return list_of_items[val]\n    return list_of_items\n\n\ndef get_quest_items(required_cnt, current_cnt_fn, attack_steps, next_steps):\n    total_required_cnt = required_cnt * MULTIPLIER\n    while True:\n        current_cnt = current_cnt_fn()\n        log(f\"{current_cnt}/{total_required_cnt}\")\n        if current_cnt == total_required_cnt:\n            for next_step in next_steps:\n                next_step()\n            break\n\n        sleep(1)\n        for attack_step in attack_steps:\n            attack_step()\n",
+        "code": "get_quest_items(\n    7,\n    lambda: get_items_count(1),\n    [lambda: play(\"KE v1\")],\n    [\n        lambda: sleep(1),\n        lambda: play(\"Move Right\", repeat=3),\n        lambda: sleep(1),\n        lambda: play(\"Move Center\"),\n    ],\n)\n\nget_quest_items(\n    7,\n    lambda: get_items_count(2),\n    [lambda: play(\"KE v1\")],\n    [\n        lambda: sleep(1),\n        lambda: play(\"Move Right\", repeat=2),\n        lambda: sleep(1),\n        lambda: play(\"Move Center\"),\n    ],\n)\n\nget_quest_items(\n    7,\n    lambda: get_items_count(3),\n    [lambda: play(\"KE v1\")],\n    [\n        lambda: sleep(1),\n        lambda: play(\"Back to Start\"),\n        lambda: sleep(1),\n        lambda: play(\"Turn In Quest\"),\n    ],\n)\n\nitem_goal += MULTIPLIER\ntelegram(f\"Mourning Flower: {item_goal}/66\")\n",
+        "sync_vars": {
+          "item_goal": 45
+        }
+      }
+    },
+    {
+      "id": "9a70b535",
+      "type": "recorded_block",
+      "x": 228.32779839562414,
+      "y": -118.11777467091497,
+      "props": {
+        "recording": "CSH - 23434345",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "d75d12f2",
+      "type": "recorded_block",
+      "x": 230.15493786352283,
+      "y": -27.076576851362123,
+      "props": {
+        "recording": "Down to Juror",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "be8b8f21",
+      "type": "recorded_block",
+      "x": 243.25122154426208,
+      "y": 60.20823956391055,
+      "props": {
+        "recording": "To The Sun",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "88b1532f",
+      "type": "recorded_block",
+      "x": 245.0783610121607,
+      "y": 142.79757922383297,
+      "props": {
+        "recording": "Back to Start",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "d69e6be4",
+      "type": "recorded_block",
+      "x": 256.01425677921975,
+      "y": 235.94742449545006,
+      "props": {
+        "recording": "Back to Start",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "2021a7b1",
+      "type": "recorded_block",
+      "x": 438.0788928059036,
+      "y": 80.09064712950311,
+      "props": {
+        "recording": "Turn In Quest",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "c6d11508",
+      "type": "code",
+      "x": -344.2996901027908,
+      "y": 221.7002463829662,
+      "props": {
+        "setup_code": "",
+        "functions_code": "",
+        "code": "play(\"Mouse to Items\")\n\ndefaced_portrait = ocr(\"Defaced Portrait\",\"(\\d+)/\")\nsmashed_sculpture = ocr(\"Smashed Sculpture\",\"(\\d+)/\")\nburned_banana = ocr(\"Burned Banana\",\"(\\d+)/\")\n\nlog(defaced_portrait, ocr(\"Defaced Portrait\"))\nlog(smashed_sculpture, ocr(\"Smashed Sculpture\"))\nlog(burned_banana, ocr(\"Burned Banana\"))\n\ndefaced_portrait = int(defaced_portrait) if defaced_portrait is not None else None\n\nsmashed_sculpture = int(smashed_sculpture) if smashed_sculpture is not None else None\n\nburned_banana = int(burned_banana) if burned_banana is not None else None\n\n\nMULTIPLIER = 3\n\n\nif smashed_sculpture < (4 * MULTIPLIER):\n\tplay(\"CSH - 23434345\")\n\n\tif smashed_sculpture >= 11:\n\t\tplay(\"Down the Room\")\n\t\tsleep(1.5)\n\n\nelif defaced_portrait < (10 * MULTIPLIER):\n\tplay(\"CSH - 23434345\")\n\n\tif defaced_portrait >= 29:\n\t\tplay(\"To The Sun\")\n\t\tsleep(1)\n\nelif burned_banana < (1 * MULTIPLIER):\n\tplay(\"CSH - 23434345\")\n\tplay(\"CSH - 23434345\")\n\tplay(\"CSH - 23434345\")\n\tplay(\"CSH - 23434345\")\n\tplay(\"CSH - 23434345\")\n\tplay(\"CSH - 23434345\")\n\tplay(\"CSH - 23434345\")\n\tplay(\"CSH - 23434345\")\n\tplay(\"CSH - 23434345\")\n\tsleep(0.5)\nelse:\n\t# Turn in Quest\n\tsleep(1)\n\tplay(\"Back to Start\")\n\tsleep(1)\n\tplay(\"Get Astravian Medal\")\n\n",
+        "sync_vars": {}
+      }
+    },
+    {
+      "id": "606b3b87",
+      "type": "recorded_block",
+      "x": 269.5918455087118,
+      "y": -148.66202790376133,
+      "props": {
+        "recording": "CSH - 2344445",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "7c7e99d9",
+      "type": "recorded_block",
+      "x": 416.45633430699667,
+      "y": -127.11006323857711,
+      "props": {
+        "recording": "CSH Spam",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "93470dbd",
+      "type": "code",
+      "x": -347.37686569908635,
+      "y": 299.7182850296354,
+      "props": {
+        "setup_code": "astravian_medal = 57",
+        "functions_code": "",
+        "code": "#defaced_portrait = ocr(\"Defaced Portrait\",\"(\\d+)/\")\n#smashed_sculpture = ocr(\"Smashed Sculpture\",\"(\\d+)/\")\n#burned_banana = ocr(\"Burned Banana\",\"(\\d+)/\")\n\n#log(defaced_portrait, ocr(\"Defaced Portrait\"))\n#log(smashed_sculpture, ocr(\"Smashed Sculpture\"))\n#log(burned_banana, ocr(\"Burned Banana\"))\n\n#defaced_portrait = int(defaced_portrait) if defaced_portrait is not None else None\n\n#smashed_sculpture = int(smashed_sculpture) if smashed_sculpture is not None else None\n\n#burned_banana = int(burned_banana) if burned_banana is not None else None\n\ndef check_item_1():\n\tval = int(ocr(\"Smashed Sculpture\",\"(\\d+)/\"))\n\tlog(f\"1: {val}\")\n\treturn val\n\ndef check_item_2():\n\tval = int(ocr(\"Defaced Portrait\",\"(\\d+)/\"))\n\tlog(f\"2: {val}\")\n\treturn val\ndef check_item_3():\n\tval = int(ocr(\"Burned Banana\",\"(\\d+)/\"))\n\tlog(f\"3: {val}\")\n\treturn val\n\n\nMULTIPLIER = 3\nsleep(1)\nplay(\"Mouse to Items\")\nwhile True:\n\tif check_item_1() == (MULTIPLIER * 4):\n\t\tbreak\n\n\tplay(\"CSH Spam\")\n\t\n\n\nsleep(1)\nplay(\"Down the Room\")\nsleep(1)\n\nplay(\"Mouse to Items\")\nwhile True:\n\tif check_item_2() == (MULTIPLIER * 10):\n\t\tbreak\n\tplay(\"CSH Spam\")\n\n\nsleep(1)\nplay(\"To The Sun\")\nsleep(1)\n\nplay(\"Mouse to Items\")\nwhile True:\n\tsleep(1)\n\tif check_item_3() == (MULTIPLIER * 1):\n\t\tbreak\n\tplay(\"CSH - 23434345\")\n\nsleep(1)\nplay(\"Back to Start\")\nsleep(1)\nplay(\"Get Astravian Medal\")\n\nastravian_medal += 3\ntelegram(f\"Astravian Medal Count: {astravian_medal}\")\n\n\n",
+        "sync_vars": {}
+      }
+    },
+    {
+      "id": "0607b6c5",
+      "type": "recorded_block",
+      "x": 369.0171080121131,
+      "y": -4.584312723678696,
+      "props": {
+        "recording": "Down to Trumpeter",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "49b6dea1",
+      "type": "ocr",
+      "x": -1.520363379061564,
+      "y": -117.21040468091482,
+      "props": {
+        "region": "Items",
+        "interval_seconds": 0.1,
+        "extract_pattern": "(\\d+)",
+        "last_value": null
+      }
+    },
+    {
+      "id": "35b12a93",
+      "type": "recorded_block",
+      "x": 569.0826868881675,
+      "y": -35.796886947991766,
+      "props": {
+        "recording": "KE 4(23)5",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "53d163b2",
+      "type": "code",
+      "x": -195.08264511322233,
+      "y": 241.4424711104114,
+      "props": {
+        "setup_code": "a_melody = 5",
+        "functions_code": "",
+        "code": "def check_item_2():\n\tval = int(ocr(\"Item 2\",\"(\\d+)\"))\n\tlog(f\"2: {val}\")\n\treturn val\n\ndef check_item_1():\n\tval = int(ocr(\"Item 1\",\"(\\d+)\"))\n\tlog(f\"1: {val}\")\n\treturn val\n\ndef check_item_3():\n\tval = int(ocr(\"Item 3\",\"(\\d+)\"))\n\tlog(f\"3: {val}\")\n\treturn val\n\n\nMULTIPLIER = 5\nITEM_1_GOAL = 10\nITEM_2_GOAL = 10\nITEM_3_GOAL = 1\nsleep(1)\nplay(\"Mouse to Items\")\nwhile True:\n\tif check_item_3() == (MULTIPLIER * ITEM_3_GOAL):\n\t\tsleep(1)\n\t\tplay(\"Down to Juror\")\n\t\tsleep(1)\n\t\tbreak\n\tsleep(1)\n\tplay(\"KE 4(23)5\")\n\t\n\n\n\n\nplay(\"Mouse to Items\")\nwhile True:\n\tif check_item_2() == (MULTIPLIER * ITEM_2_GOAL):\n\t\tsleep(1)\n\t\tplay(\"Down to Trumpeter\")\n\t\tsleep(1)\n\t\tbreak\n\tplay(\"KE 4(23)5\")\n\n\nplay(\"Mouse to Items\")\nwhile True:\n\tsleep(1)\n\tif check_item_1() == (MULTIPLIER * ITEM_1_GOAL):\n\t\tsleep(1)\n\t\tplay(\"Back to Start\")\n\t\tsleep(1)\n\t\tplay(\"Turn In Quest\")\n\t\tbreak\n\tplay(\"KE 4(23)5\")\n\n\n\na_melody += MULTIPLIER\ntelegram(f\"A Melody Count: {a_melody}\")\n\n\n",
+        "sync_vars": {}
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "f3000b71",
+      "from_node": "dff8aa03",
+      "from_port": "out",
+      "to_node": "9df75b82",
+      "to_port": "in",
+      "log_message": ""
+    }
+  ]
+}

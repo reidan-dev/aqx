@@ -1,0 +1,99 @@
+{
+  "version": 1,
+  "repeat": 4,
+  "nodes": [
+    {
+      "id": "a5e77df1",
+      "type": "start",
+      "x": -985.0145882725849,
+      "y": -330.62021506055646,
+      "props": {}
+    },
+    {
+      "id": "6506db44",
+      "type": "log",
+      "x": -455.59999410476,
+      "y": -182.56834871935172,
+      "props": {
+        "message": "Hello"
+      }
+    },
+    {
+      "id": "604d22b4",
+      "type": "recorded_block",
+      "x": -336.12380760068146,
+      "y": -317.2461592393322,
+      "props": {
+        "recording": "Test",
+        "repeat": 1
+      }
+    },
+    {
+      "id": "89a0e4ad",
+      "type": "ocr",
+      "x": -726.7372918017222,
+      "y": -312.3581540020141,
+      "props": {
+        "region": "My Name",
+        "interval_seconds": 1.1,
+        "last_value": "rprise"
+      }
+    },
+    {
+      "id": "e6402f85",
+      "type": "if",
+      "x": -723.6868493338075,
+      "y": -183.65252013140747,
+      "props": {
+        "cases": [
+          {
+            "source_type": "ocr",
+            "source_node": "89a0e4ad",
+            "source_label": "My Name",
+            "source_name": "",
+            "operator": "equals",
+            "compare_to": "REINE"
+          }
+        ]
+      }
+    },
+    {
+      "id": "056e1772",
+      "type": "log",
+      "x": -408.32524258075654,
+      "y": -88.51178222911574,
+      "props": {
+        "message": "No!"
+      }
+    },
+    {
+      "id": "cd0f06b7",
+      "type": "set_variable",
+      "x": -599.937358076281,
+      "y": -245.52726576017065,
+      "props": {
+        "name": "",
+        "source_type": "literal",
+        "literal_value": "",
+        "source_node": "",
+        "source_label": ""
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "73966a55",
+      "from_node": "a5e77df1",
+      "from_port": "out",
+      "to_node": "89a0e4ad",
+      "to_port": "in"
+    },
+    {
+      "id": "9925a114",
+      "from_node": "89a0e4ad",
+      "from_port": "out",
+      "to_node": "e6402f85",
+      "to_port": "in"
+    }
+  ]
+}

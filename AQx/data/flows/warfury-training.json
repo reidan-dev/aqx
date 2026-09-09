@@ -1,0 +1,126 @@
+{
+  "version": 1,
+  "repeat": 0,
+  "nodes": [
+    {
+      "id": "859cb15d",
+      "type": "start",
+      "x": 40.0,
+      "y": 40.0,
+      "props": {}
+    },
+    {
+      "id": "6bb460d2",
+      "type": "code",
+      "x": 285.178829844884,
+      "y": 84.48305691278287,
+      "props": {
+        "code": "warfury_training = ocr(\"Warfury Training\", \"(\\d+)/\")\n\nwarfury_training = int(warfury_training) if warfury_training else None\n\nif warfury_training is not None:\n\tif warfury_training == 120:\n\t\t# turn in quest\n\t\tplay(\"TurnInQuest Enchanted Scale\")\n\t\tsleep(1)\n\t\ttelegram(\"Enchanted Scale +10\")\n\t\n\tplay(\"DOT Combo\")\n\tsleep(0.5)"
+      }
+    },
+    {
+      "id": "80865e2b",
+      "type": "ocr",
+      "x": 281.2781495575389,
+      "y": -49.314165973927665,
+      "props": {
+        "region": "Warfury Training",
+        "interval_seconds": 0.1,
+        "extract_pattern": "(\\d+)/",
+        "last_value": null
+      }
+    },
+    {
+      "id": "7902f44a",
+      "type": "skills",
+      "x": -33.042782363707204,
+      "y": -87.17334826502463,
+      "props": {
+        "skills": [
+          {
+            "region": "skill-1",
+            "key": "1"
+          },
+          {
+            "region": "skill-2",
+            "key": "2"
+          },
+          {
+            "region": "skill-3",
+            "key": "3"
+          },
+          {
+            "region": "skill-4",
+            "key": "4"
+          },
+          {
+            "region": "skill-5",
+            "key": "5"
+          },
+          {
+            "region": "skill-6",
+            "key": "6"
+          }
+        ],
+        "last_state": {
+          "s4": "ready",
+          "s3": "cooldown",
+          "s2": "cooldown",
+          "s5": "ready",
+          "s1": "cooldown"
+        }
+      }
+    },
+    {
+      "id": "a6822a32",
+      "type": "recorded_block",
+      "x": 461.70274226424556,
+      "y": -73.187609052927,
+      "props": {
+        "recording": "DOT Combo",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "3c58a4df",
+      "type": "recorded_block",
+      "x": 467.8215031695381,
+      "y": 53.55815255670751,
+      "props": {
+        "recording": "TurnInQuest Enchanted Scale",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "addf31d6",
+      "type": "recorded_block",
+      "x": 461.70274226424544,
+      "y": 145.339566136098,
+      "props": {
+        "recording": "GetIntoPosition",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "dc2a159a",
+      "from_node": "859cb15d",
+      "from_port": "out",
+      "to_node": "6bb460d2",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "c3cbdc58",
+      "from_node": "859cb15d",
+      "from_port": "out",
+      "to_node": "80865e2b",
+      "to_port": "in",
+      "log_message": ""
+    }
+  ]
+}

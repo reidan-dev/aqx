@@ -1,0 +1,205 @@
+{
+  "version": 1,
+  "repeat": 0,
+  "nodes": [
+    {
+      "id": "b50a1080",
+      "type": "start",
+      "x": -985.9774873201328,
+      "y": -232.88555813041003,
+      "props": {}
+    },
+    {
+      "id": "d143ba98",
+      "type": "ocr",
+      "x": -498.5173807271593,
+      "y": -210.82312561551655,
+      "props": {
+        "region": "MyMana",
+        "interval_seconds": 0.1,
+        "last_value": "5"
+      }
+    },
+    {
+      "id": "b4b266f7",
+      "type": "recorded_block",
+      "x": 67.31111983610072,
+      "y": -195.2447343294589,
+      "props": {
+        "recording": "CSH - BA - 4x",
+        "repeat": 1
+      }
+    },
+    {
+      "id": "40bff960",
+      "type": "while_loop",
+      "x": -307.26666621289394,
+      "y": -155.30305911728357,
+      "props": {
+        "condition": {
+          "source_type": "ocr",
+          "source_node": "d143ba98",
+          "source_label": "MyMana",
+          "source_name": "",
+          "operator": "greater_than",
+          "compare_to": "10"
+        }
+      }
+    },
+    {
+      "id": "e8bc207b",
+      "type": "recorded_block",
+      "x": -86.22772350615469,
+      "y": -41.965622529756224,
+      "props": {
+        "recording": "CSH -  S2",
+        "repeat": 1
+      }
+    },
+    {
+      "id": "e9ca43fe",
+      "type": "set_variable",
+      "x": -494.49949953429353,
+      "y": -7.9806743166771135,
+      "props": {
+        "name": "my_mana",
+        "source_type": "ocr",
+        "literal_value": "",
+        "source_node": "d143ba98",
+        "source_label": "MyMana"
+      }
+    },
+    {
+      "id": "be66a88c",
+      "type": "log",
+      "x": -341.2219314261582,
+      "y": 8.530806131092241,
+      "props": {
+        "message": "mana is $my_mana"
+      }
+    },
+    {
+      "id": "6dfc82ff",
+      "type": "recorded_block",
+      "x": 66.27539813080149,
+      "y": -275.99525447584097,
+      "props": {
+        "recording": "CSH - 23434345",
+        "repeat": 1
+      }
+    },
+    {
+      "id": "46388a88",
+      "type": "recorded_block",
+      "x": -729.311123988427,
+      "y": -325.62197907050233,
+      "props": {
+        "recording": "Blaze Binder",
+        "repeat": 1
+      }
+    },
+    {
+      "id": "f049e77b",
+      "type": "loop_exit",
+      "x": -134.51845837689208,
+      "y": -180.16326335058415,
+      "props": {
+        "condition": {
+          "source_type": "ocr",
+          "source_node": "d143ba98",
+          "source_label": "MyMana",
+          "source_name": "",
+          "operator": "less_than",
+          "compare_to": "10",
+          "negate": false
+        }
+      }
+    },
+    {
+      "id": "ccb6a8a0",
+      "type": "recorded_block",
+      "x": -697.0608022483146,
+      "y": -221.5557353418979,
+      "props": {
+        "recording": "CSH -  S2",
+        "repeat": 1
+      }
+    },
+    {
+      "id": "1ada831d",
+      "type": "recorded_block",
+      "x": -690.4383895262163,
+      "y": -461.8103979178392,
+      "props": {
+        "recording": "ArchPaladin",
+        "repeat": 1
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "71bb95ba",
+      "from_node": "40bff960",
+      "from_port": "done",
+      "to_node": "e8bc207b",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "3d78a57b",
+      "from_node": "d143ba98",
+      "from_port": "out",
+      "to_node": "e9ca43fe",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "748dcad1",
+      "from_node": "e9ca43fe",
+      "from_port": "out",
+      "to_node": "be66a88c",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "9518dd93",
+      "from_node": "be66a88c",
+      "from_port": "out",
+      "to_node": "40bff960",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "a6c787ae",
+      "from_node": "40bff960",
+      "from_port": "body",
+      "to_node": "f049e77b",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "10dc0605",
+      "from_node": "ccb6a8a0",
+      "from_port": "out",
+      "to_node": "d143ba98",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "39dd0476",
+      "from_node": "f049e77b",
+      "from_port": "out",
+      "to_node": "b4b266f7",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "1d5dac63",
+      "from_node": "b50a1080",
+      "from_port": "out",
+      "to_node": "46388a88",
+      "to_port": "in",
+      "log_message": ""
+    }
+  ]
+}

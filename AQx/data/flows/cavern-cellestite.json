@@ -1,0 +1,179 @@
+{
+  "version": 1,
+  "repeat": 0,
+  "nodes": [
+    {
+      "id": "a8a1225e",
+      "type": "start",
+      "x": -133.32694274451308,
+      "y": 159.24023599461975,
+      "props": {}
+    },
+    {
+      "id": "ee9beeb5",
+      "type": "skills",
+      "x": -71.91415319553792,
+      "y": 3.6238788294088775,
+      "props": {
+        "skills": [
+          {
+            "region": "skill-1",
+            "key": "1"
+          },
+          {
+            "region": "skill-2",
+            "key": "2"
+          },
+          {
+            "region": "skill-3",
+            "key": "3"
+          },
+          {
+            "region": "skill-4",
+            "key": "4"
+          },
+          {
+            "region": "skill-5",
+            "key": "5"
+          },
+          {
+            "region": "skill-6",
+            "key": "6"
+          }
+        ],
+        "last_state": {
+          "s4": "ready",
+          "s3": "cooldown",
+          "s2": "cooldown",
+          "s5": "ready",
+          "s1": "cooldown"
+        }
+      }
+    },
+    {
+      "id": "7e890dde",
+      "type": "code",
+      "x": 126.75278788889588,
+      "y": -10.978358024435977,
+      "props": {
+        "setup_code": "counter = 0",
+        "functions_code": "",
+        "code": "play(\"CSH Spam + Skill 3\")\nplay(\"CSH Spam + Skill 3\")\nplay(\"CSH Spam + Skill 3\")\nplay(\"CSH Spam + Skill 3\")\nplay(\"CSH Spam + Skill 3\")\n\ncounter += 1\nif counter % 20 == 0:\n\tplay(\"Turn In Quest\")\n\ttelegram(\"Check now!\")\n",
+        "sync_vars": {}
+      }
+    },
+    {
+      "id": "814c3534",
+      "type": "recorded_block",
+      "x": 291.6227669300249,
+      "y": -112.9859118489889,
+      "props": {
+        "recording": "GoToA",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "4422aa36",
+      "type": "ocr",
+      "x": 8.198447284100467,
+      "y": -105.90658087550707,
+      "props": {
+        "region": "Items",
+        "interval_seconds": 5.0,
+        "extract_pattern": "",
+        "last_value": null
+      }
+    },
+    {
+      "id": "44f4f658",
+      "type": "recorded_block",
+      "x": 292.3514881332165,
+      "y": -35.420083804175285,
+      "props": {
+        "recording": "GoToB",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "0c6ac43d",
+      "type": "recorded_block",
+      "x": 297.47090115592937,
+      "y": 39.95039833087769,
+      "props": {
+        "recording": "GoToC",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "d8430a59",
+      "type": "recorded_block",
+      "x": 454.8040246887744,
+      "y": -15.66503138305821,
+      "props": {
+        "recording": "CSH Spam + Skill 3",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "cd96d6d2",
+      "type": "recorded_block",
+      "x": 301.6694888606105,
+      "y": 137.84885173961126,
+      "props": {
+        "recording": "BackToStart",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "5af79cbe",
+      "type": "code",
+      "x": 67.70539685952394,
+      "y": 151.95939213647452,
+      "props": {
+        "setup_code": "item = 3\nMULTIPLIER = 3\n",
+        "functions_code": "def get_items_count(val=None):\n    list_of_items = [int(item) for item in ocr_lines(\"Items\", \"(\\d+)\")]\n    log(list_of_items)\n    if val is not None:\n        val -= 1\n        return list_of_items[val]\n    return list_of_items\n\n\ndef get_quest_items(required_cnt, current_cnt_fn, attack_steps, next_steps):\n    total_required_cnt = required_cnt * MULTIPLIER\n    while True:\n        current_cnt = current_cnt_fn()\n        log(f\"{current_cnt}/{total_required_cnt}\")\n        if current_cnt == total_required_cnt:\n            for next_step in next_steps:\n                next_step()\n            break\n\n        sleep(1)\n        for attack_step in attack_steps:\n            attack_step()\n",
+        "code": "get_quest_items(\n    25,\n    lambda: get_items_count(4),\n    [\n        lambda: play(\"CSH Spam + Skill 3\"),\n        lambda: play(\"CSH Spam + Skill 3\"),\n        lambda: sleep(0.5),\n    ],\n    [\n    \tlambda: play(\"GoToA\"),\n\t    lambda: sleep(0.5),\n\n    ],\n)\n\nget_quest_items(\n    1,\n    lambda: get_items_count(1),\n    [\n        lambda: play(\"CSH - 23434345\"),\n        lambda: sleep(0.25),\n    ],\n    [\n    \tlambda: play(\"GoToB\"),\n\t    lambda: sleep(0.5),\n\n    ],\n)\n\nget_quest_items(\n    1,\n    lambda: get_items_count(2),\n    [\n        lambda: play(\"CSH - 23434345\"),\n        lambda: sleep(0.25),\n    ],\n    [\n    \tlambda: play(\"GoToC\"),\n\t    lambda: sleep(0.5),\n\n    ],\n)\n\nget_quest_items(\n    1,\n    lambda: get_items_count(3),\n    [\n        lambda: play(\"CSH - 23434345\"),\n        lambda: sleep(0.25),\n    ],\n    [\n    \tlambda: play(\"BackToStart\"),\n\t    lambda: sleep(0.5),\n\t    lambda: play(\"Turn In Quest\")\n\n    ],\n)\n\nitem += MULTIPLIER\ntelegram(f\"Indulgence: {item}/50\")",
+        "sync_vars": {
+          "item_goal": 45
+        }
+      }
+    },
+    {
+      "id": "efbdbd3f",
+      "type": "recorded_block",
+      "x": 305.8680765652918,
+      "y": 222.16761446659814,
+      "props": {
+        "recording": "Turn In Quest",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "bd19ddbf",
+      "type": "recorded_block",
+      "x": 471.2243340070278,
+      "y": 101.24498898012078,
+      "props": {
+        "recording": "CSH - 23434345",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "4e616a02",
+      "from_node": "a8a1225e",
+      "from_port": "out",
+      "to_node": "5af79cbe",
+      "to_port": "in",
+      "log_message": ""
+    }
+  ]
+}

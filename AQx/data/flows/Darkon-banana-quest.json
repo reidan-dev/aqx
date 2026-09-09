@@ -1,0 +1,97 @@
+{
+  "version": 1,
+  "repeat": 0,
+  "nodes": [
+    {
+      "id": "433c2698",
+      "type": "start",
+      "x": -254.2796255319148,
+      "y": -75.67060425531912,
+      "props": {}
+    },
+    {
+      "id": "6623a3da",
+      "type": "ocr",
+      "x": -70.7474042553192,
+      "y": -93.64983829787235,
+      "props": {
+        "region": "Banana Quest",
+        "interval_seconds": 0.1,
+        "last_value": null
+      }
+    },
+    {
+      "id": "add7f46f",
+      "type": "if",
+      "x": 110.413174468085,
+      "y": -103.85606808510639,
+      "props": {
+        "cases": [
+          {
+            "source_type": "ocr",
+            "source_node": "6623a3da",
+            "source_label": "Banana Quest",
+            "source_name": "",
+            "operator": "equals",
+            "compare_to": "Banana 222/22",
+            "negate": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "1111d94b",
+      "type": "recorded_block",
+      "x": 311.13569361702116,
+      "y": -114.91281702127657,
+      "props": {
+        "recording": "Turn In Banana Quest",
+        "repeat": 1
+      }
+    },
+    {
+      "id": "76dd062a",
+      "type": "recorded_block",
+      "x": 311.9862127659575,
+      "y": -29.860902127659564,
+      "props": {
+        "recording": "Blaze Binder",
+        "repeat": 1
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "1f2af648",
+      "from_node": "433c2698",
+      "from_port": "out",
+      "to_node": "6623a3da",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "1a3e6168",
+      "from_node": "6623a3da",
+      "from_port": "out",
+      "to_node": "add7f46f",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "31800f39",
+      "from_node": "add7f46f",
+      "from_port": "If",
+      "to_node": "1111d94b",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "eab63600",
+      "from_node": "add7f46f",
+      "from_port": "Else",
+      "to_node": "76dd062a",
+      "to_port": "in",
+      "log_message": ""
+    }
+  ]
+}

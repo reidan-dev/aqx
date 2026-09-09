@@ -1,0 +1,180 @@
+{
+  "version": 1,
+  "repeat": 0,
+  "nodes": [
+    {
+      "id": "f6c23320",
+      "type": "start",
+      "x": -701.5109446808507,
+      "y": -232.84654297872333,
+      "props": {}
+    },
+    {
+      "id": "6b483533",
+      "type": "ocr",
+      "x": -147.49258212765963,
+      "y": -129.57009702127658,
+      "props": {
+        "region": "MyMana",
+        "interval_seconds": 0.1,
+        "last_value": null
+      }
+    },
+    {
+      "id": "22c7fb2a",
+      "type": "set_variable",
+      "x": -320.99848851063837,
+      "y": -92.74261787234043,
+      "props": {
+        "name": "my_mana",
+        "source_type": "ocr",
+        "literal_value": "",
+        "source_node": "6b483533",
+        "source_label": "MyMana"
+      }
+    },
+    {
+      "id": "19c0f8bf",
+      "type": "while_loop",
+      "x": -319.83611234042553,
+      "y": 12.40989957446807,
+      "props": {
+        "condition": {
+          "source_type": "ocr",
+          "source_node": "6b483533",
+          "source_label": "MyMana",
+          "source_name": "",
+          "operator": "greater_than",
+          "compare_to": "10",
+          "negate": false
+        }
+      }
+    },
+    {
+      "id": "7df102b5",
+      "type": "recorded_block",
+      "x": -104.59806638297869,
+      "y": -44.65993531914893,
+      "props": {
+        "recording": "CSH - BA - 4x",
+        "repeat": 1
+      }
+    },
+    {
+      "id": "4185514f",
+      "type": "recorded_block",
+      "x": -84.1856068085107,
+      "y": 41.072394893617016,
+      "props": {
+        "recording": "CSH -  S2",
+        "repeat": 1
+      }
+    },
+    {
+      "id": "b2ec5541",
+      "type": "ocr",
+      "x": -510.8060119148934,
+      "y": -234.495809361702,
+      "props": {
+        "region": "quest_req",
+        "interval_seconds": 0.1,
+        "last_value": "Vial of Magic Flame 0/1"
+      }
+    },
+    {
+      "id": "1b2be732",
+      "type": "if",
+      "x": -333.2176136170212,
+      "y": -236.5370553191489,
+      "props": {
+        "cases": [
+          {
+            "source_type": "ocr",
+            "source_node": "b2ec5541",
+            "source_label": "quest_req",
+            "source_name": "",
+            "operator": "equals",
+            "compare_to": "Vial of Magic Flame 1/1",
+            "negate": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "1a61caa7",
+      "type": "recorded_block",
+      "x": -137.25800170212764,
+      "y": -233.47518638297868,
+      "props": {
+        "recording": "Turn In Rep Quest",
+        "repeat": 1
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "3aa94c0b",
+      "from_node": "6b483533",
+      "from_port": "out",
+      "to_node": "22c7fb2a",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "40f3e1a8",
+      "from_node": "22c7fb2a",
+      "from_port": "out",
+      "to_node": "19c0f8bf",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "4e639165",
+      "from_node": "19c0f8bf",
+      "from_port": "body",
+      "to_node": "7df102b5",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "c83893b1",
+      "from_node": "19c0f8bf",
+      "from_port": "done",
+      "to_node": "4185514f",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "ec9d03ee",
+      "from_node": "f6c23320",
+      "from_port": "out",
+      "to_node": "b2ec5541",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "7a06ec58",
+      "from_node": "b2ec5541",
+      "from_port": "out",
+      "to_node": "1b2be732",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "fcfb4902",
+      "from_node": "1b2be732",
+      "from_port": "Else",
+      "to_node": "6b483533",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "94c9d0ad",
+      "from_node": "1b2be732",
+      "from_port": "If",
+      "to_node": "1a61caa7",
+      "to_port": "in",
+      "log_message": ""
+    }
+  ]
+}

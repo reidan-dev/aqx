@@ -1,0 +1,193 @@
+{
+  "version": 1,
+  "repeat": 0,
+  "nodes": [
+    {
+      "id": "68176d21",
+      "type": "start",
+      "x": -68.52055106360731,
+      "y": 75.19585439900777,
+      "props": {}
+    },
+    {
+      "id": "0f7f4413",
+      "type": "skills",
+      "x": -157.54360037998404,
+      "y": -77.18164730840203,
+      "props": {
+        "skills": [
+          {
+            "region": "skill-1",
+            "key": "1"
+          },
+          {
+            "region": "skill-2",
+            "key": "2"
+          },
+          {
+            "region": "skill-3",
+            "key": "3"
+          },
+          {
+            "region": "skill-4",
+            "key": "4"
+          },
+          {
+            "region": "skill-5",
+            "key": "5"
+          },
+          {
+            "region": "skill-6",
+            "key": "6"
+          }
+        ],
+        "last_state": {
+          "s4": "ready",
+          "s3": "cooldown",
+          "s2": "cooldown",
+          "s5": "ready",
+          "s1": "cooldown"
+        }
+      }
+    },
+    {
+      "id": "8d2615e1",
+      "type": "recorded_block",
+      "x": 158.17253539342656,
+      "y": -33.997408999379864,
+      "props": {
+        "recording": "DOT Combo",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "919acdd0",
+      "type": "code",
+      "x": 119.54891685261339,
+      "y": 156.15230178541992,
+      "props": {
+        "setup_code": "",
+        "functions_code": "",
+        "code": "#items = ocr_lines(\"Items\", \"(\\d+)/\")\n#item_to_check = int(items[3])\n\n#play(\"Get Black Knight Orb\")\nplay(\"CSH SPAM 4\")\n#play(\"DOT Combo\")\n\n#log(item_to_check)\n#if item_to_check % 50 in range(0,6):\n#\ttelegram(f\"Archfiend's Favor: {item_to_check}/500\")",
+        "sync_vars": {}
+      }
+    },
+    {
+      "id": "8c7c33ca",
+      "type": "ocr",
+      "x": 34.98704499689931,
+      "y": -105.12236476404141,
+      "props": {
+        "region": "Items",
+        "interval_seconds": 5.0,
+        "extract_pattern": "",
+        "last_value": null
+      }
+    },
+    {
+      "id": "2bca48ef",
+      "type": "recorded_block",
+      "x": 216.66908377382472,
+      "y": -151.36527348086773,
+      "props": {
+        "recording": "CSH SPAM 4",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "61ae9b9f",
+      "type": "code",
+      "x": 368.1352925448458,
+      "y": 119.82156011598116,
+      "props": {
+        "setup_code": "item_goal = 0\nMULTIPLIER = 1\n",
+        "functions_code": "def get_items_count(val=None):\n    list_of_items = [int(item) for item in ocr_lines(\"Items\", \"(\\d+)\")]\n    log(list_of_items)\n    if val is not None:\n        val -= 1\n        return list_of_items[val]\n    return list_of_items\n\n\ndef get_quest_items(required_cnt, current_cnt_fn, attack_steps, next_steps):\n    total_required_cnt = required_cnt * MULTIPLIER\n    while True:\n        current_cnt = current_cnt_fn()\n        log(f\"{current_cnt}/{total_required_cnt}\")\n        if current_cnt >= total_required_cnt:\n            for next_step in next_steps:\n                next_step()\n            break\n\n        sleep(1)\n        for attack_step in attack_steps:\n            attack_step()\n",
+        "code": "get_quest_items(\n    476,\n    lambda: get_items_count(1),\n    [lambda: play(\"DOT Combo\")],\n    [],\n)\nplay(\"Turn In Quest Emblem of Nulgath\")\ntelegram(\"Turning in for Emblem of Nulgath!\")",
+        "sync_vars": {
+          "item_goal": 45
+        }
+      }
+    },
+    {
+      "id": "8b71e3d6",
+      "type": "recorded_block",
+      "x": 330.6552772954177,
+      "y": -58.54794447042786,
+      "props": {
+        "recording": "Turn In Quest",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "4fc161f4",
+      "type": "recorded_block",
+      "x": 577.7868169079997,
+      "y": -180.62121943483672,
+      "props": {
+        "recording": "Get Black Knight Orb",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "d43b3212",
+      "type": "code",
+      "x": 206.64703720952994,
+      "y": 61.75929370412223,
+      "props": {
+        "setup_code": "item_goal = 0\nMULTIPLIER = 1\n",
+        "functions_code": "def get_items_count(val=None):\n    list_of_items = [int(item) for item in ocr_lines(\"Items\", \"(\\d+)\")]\n    log(list_of_items)\n    if val is not None:\n        val -= 1\n        return list_of_items[val]\n    return list_of_items\n\n\ndef get_quest_items(required_cnt, current_cnt_fn, attack_steps, next_steps):\n    total_required_cnt = required_cnt * MULTIPLIER\n    while True:\n        current_cnt = current_cnt_fn()\n        log(f\"{current_cnt}/{total_required_cnt}\")\n        if current_cnt == total_required_cnt:\n            for next_step in next_steps:\n                next_step()\n            break\n\n        sleep(1)\n        for attack_step in attack_steps:\n            attack_step()\n",
+        "code": "get_quest_items(\n    13,\n    lambda: get_items_count(1),\n    [lambda: play(\"DOT Combo\")],\n    [],\n)\nplay(\"Turn In Quest\")\ntelegram(\"Turning in 12 Relics of Chaos!\")",
+        "sync_vars": {
+          "item_goal": 45
+        }
+      }
+    },
+    {
+      "id": "584528bf",
+      "type": "recorded_block",
+      "x": 463.14791696957815,
+      "y": -28.547944470427858,
+      "props": {
+        "recording": "Turn In Quest Emblem of Nulgath",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "8a77bf0b",
+      "type": "recorded_block",
+      "x": 579.9554247589889,
+      "y": -101.14318894770655,
+      "props": {
+        "recording": "Get Black Knight Orb",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "5ce560f5",
+      "type": "recorded_block",
+      "x": 619.0360090673587,
+      "y": 114.35975143006593,
+      "props": {
+        "recording": "DOT Combo",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "c092e4b6",
+      "from_node": "68176d21",
+      "from_port": "out",
+      "to_node": "d43b3212",
+      "to_port": "in",
+      "log_message": ""
+    }
+  ]
+}

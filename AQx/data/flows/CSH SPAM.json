@@ -1,0 +1,314 @@
+{
+  "version": 1,
+  "repeat": 0,
+  "nodes": [
+    {
+      "id": "a11e335b",
+      "type": "start",
+      "x": -577.2906703421805,
+      "y": -149.50784245920272,
+      "props": {}
+    },
+    {
+      "id": "535247ff",
+      "type": "recorded_block",
+      "x": -196.62046530897936,
+      "y": -278.21244594020015,
+      "props": {
+        "recording": "CSH Spam + Skill 3",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "84945796",
+      "type": "recorded_block",
+      "x": -369.8440648959455,
+      "y": -279.0589536818827,
+      "props": {
+        "recording": "Blaze Binder",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "570c0b22",
+      "type": "code",
+      "x": 152.7581566632843,
+      "y": -12.383670696861742,
+      "props": {
+        "setup_code": "",
+        "functions_code": "",
+        "code": "# DOT FARM\nenemy_name = ocr(\"Enemy Name\")\ns = skills()\n\n\n\n\nif enemy_name:\n\t#while not stop_requested():\n\ts.press_ready([\n\t\t\ts.s3,\n\t\t\ts.s2,\n\t\t\ts.s3,\n\t\t\ts.s4,\n\t\t])\nelse:\n\tkeystroke(\"x\")\n\tkeystroke(\"t\",0.1,0.3)\n",
+        "sync_vars": {}
+      }
+    },
+    {
+      "id": "51418bcf",
+      "type": "ocr",
+      "x": -79.81115744025462,
+      "y": -62.104042811994866,
+      "props": {
+        "region": "Enemy Name",
+        "interval_seconds": 0.1,
+        "extract_pattern": "",
+        "last_value": "DREADROOM"
+      }
+    },
+    {
+      "id": "6abb1c52",
+      "type": "connector",
+      "x": -209.80213813266272,
+      "y": -146.79917400783125,
+      "props": {
+        "name": ""
+      }
+    },
+    {
+      "id": "1ce0530d",
+      "type": "recorded_block",
+      "x": -27.189135510458314,
+      "y": -274.95975469247924,
+      "props": {
+        "recording": "CSH Spam",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "732d3081",
+      "type": "controls",
+      "x": -548.2754426907297,
+      "y": -283.437386249095,
+      "props": {
+        "controls": [
+          {
+            "name": "battle_mode",
+            "options": [
+              "CSH Spam",
+              "CSH Spam + Skill 3",
+              "CSH Proper Combo"
+            ],
+            "current": "CSH Spam + Skill 3"
+          }
+        ]
+      }
+    },
+    {
+      "id": "8da15e80",
+      "type": "recorded_block",
+      "x": -154.73166116441342,
+      "y": -365.0846149638626,
+      "props": {
+        "recording": "CSH Proper Combo",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "1c0fc256",
+      "type": "skills",
+      "x": -548.4871484091461,
+      "y": -9.332466769525922,
+      "props": {
+        "skills": [
+          {
+            "region": "skill-1",
+            "key": "1"
+          },
+          {
+            "region": "skill-2",
+            "key": "2"
+          },
+          {
+            "region": "skill-3",
+            "key": "3"
+          },
+          {
+            "region": "skill-4",
+            "key": "4"
+          },
+          {
+            "region": "skill-5",
+            "key": "5"
+          },
+          {
+            "region": "skill-6",
+            "key": "6"
+          }
+        ],
+        "last_state": {
+          "s4": "ready",
+          "s3": "cooldown",
+          "s2": "cooldown",
+          "s5": "ready",
+          "s1": "cooldown"
+        }
+      }
+    },
+    {
+      "id": "b1672b01",
+      "type": "recorded_block",
+      "x": -612.5079459405235,
+      "y": -357.4455533463911,
+      "props": {
+        "recording": "DOT Farming",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "e132fcb7",
+      "type": "turn_off",
+      "x": -643.9576023344694,
+      "y": 116.60958087167367,
+      "props": {
+        "duration": "3m"
+      }
+    },
+    {
+      "id": "a9c6b031",
+      "type": "ocr",
+      "x": -81.72177544753742,
+      "y": -145.25759460820876,
+      "props": {
+        "region": "DoomCoin",
+        "interval_seconds": 0.1,
+        "extract_pattern": "(\\d+)/",
+        "last_value": null
+      }
+    },
+    {
+      "id": "1e9257cc",
+      "type": "recorded_block",
+      "x": 126.98909705154983,
+      "y": -276.513663646616,
+      "props": {
+        "recording": "DoomCoinTurnIn",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "9c2dd4ed",
+      "type": "if",
+      "x": 286.4601141176744,
+      "y": -288.6150006839464,
+      "props": {
+        "cases": [
+          {
+            "source_type": "ocr",
+            "source_node": "a9c6b031",
+            "source_label": "DoomCoin",
+            "source_name": "",
+            "operator": "greater_than",
+            "compare_to": "500",
+            "negate": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "209ddeea",
+      "type": "set_variable",
+      "x": 82.96528562586013,
+      "y": -144.22427932103884,
+      "props": {
+        "name": "doom_coin_count",
+        "source_type": "ocr",
+        "literal_value": "",
+        "source_node": "a9c6b031",
+        "source_label": "DoomCoin"
+      }
+    },
+    {
+      "id": "7ee2ca34",
+      "type": "code",
+      "x": -76.38878299464953,
+      "y": 23.590504197553486,
+      "props": {
+        "setup_code": "",
+        "functions_code": "",
+        "code": "# CSH S4 FARM\nenemy_name = ocr(\"Enemy Name\")\ns = skills()\ndoom_coin_count = variables[\"doom_coin_count\"]\n\n#log(doom_coin_count)\n#if int(doom_coin_count) > 101:\n#\tplay(\"DoomCoinTurnIn\")\n\ns.s2.press()\nif enemy_name:\n\t#while not stop_requested():\n\tplay(\"CSH Spam\")\n\t\nelse:\n\t#keystroke(\"x\")\n\tkeystroke(\"t\",0.1,0.2)\n",
+        "sync_vars": {}
+      }
+    },
+    {
+      "id": "533f8427",
+      "type": "set_variable",
+      "x": -316.6103172810744,
+      "y": 45.10789317552668,
+      "props": {
+        "name": "",
+        "source_type": "literal",
+        "literal_value": "",
+        "source_node": "",
+        "source_label": ""
+      }
+    },
+    {
+      "id": "d7af8e0a",
+      "type": "recorded_block",
+      "x": 342.7559517574523,
+      "y": -58.79136836486191,
+      "props": {
+        "recording": "CSH Burst",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "582e1092",
+      "type": "recorded_block",
+      "x": -51.41248051086174,
+      "y": 112.67688872830217,
+      "props": {
+        "recording": "DOT Farming",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "dad8a5e3",
+      "from_node": "a11e335b",
+      "from_port": "out",
+      "to_node": "6abb1c52",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "2e30cd2c",
+      "from_node": "6abb1c52",
+      "from_port": "out",
+      "to_node": "51418bcf",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "5e90755e",
+      "from_node": "6abb1c52",
+      "from_port": "out",
+      "to_node": "a9c6b031",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "004791c1",
+      "from_node": "a9c6b031",
+      "from_port": "out",
+      "to_node": "209ddeea",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "3d721fb8",
+      "from_node": "6abb1c52",
+      "from_port": "out",
+      "to_node": "582e1092",
+      "to_port": "in",
+      "log_message": ""
+    }
+  ]
+}

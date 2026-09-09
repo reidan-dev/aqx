@@ -1,0 +1,20 @@
+{
+  "name": "CSH -  S2",
+  "mode": {
+    "mouse": false,
+    "keyboard": true
+  },
+  "duration": 0.551820749999024,
+  "events": [
+    {
+      "type": "key_down",
+      "t": 0.4120099170249887,
+      "key": "2"
+    },
+    {
+      "type": "key_up",
+      "t": 0.551820749999024,
+      "key": "2"
+    }
+  ]
+}

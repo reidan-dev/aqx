@@ -1,0 +1,334 @@
+{
+  "version": 1,
+  "repeat": 0,
+  "nodes": [
+    {
+      "id": "360908a3",
+      "type": "start",
+      "x": -1288.4937215652685,
+      "y": -113.83116097213416,
+      "props": {}
+    },
+    {
+      "id": "c6a00292",
+      "type": "skills",
+      "x": -1197.798004652657,
+      "y": -431.71632523498914,
+      "props": {
+        "skills": [
+          {
+            "region": "skill-1",
+            "key": "1"
+          },
+          {
+            "region": "skill-2",
+            "key": "2"
+          },
+          {
+            "region": "skill-3",
+            "key": "3"
+          },
+          {
+            "region": "skill-4",
+            "key": "4"
+          },
+          {
+            "region": "skill-5",
+            "key": "5"
+          },
+          {
+            "region": "skill-6",
+            "key": "6"
+          }
+        ],
+        "last_state": {
+          "s4": "ready",
+          "s3": "cooldown",
+          "s2": "cooldown",
+          "s5": "ready",
+          "s1": "cooldown"
+        }
+      }
+    },
+    {
+      "id": "5490da02",
+      "type": "connector",
+      "x": -1013.1772157875632,
+      "y": 31.054690973370157,
+      "props": {
+        "name": ""
+      }
+    },
+    {
+      "id": "3361dedb",
+      "type": "code",
+      "x": -1418.5631516299177,
+      "y": -362.37173586122117,
+      "props": {
+        "setup_code": "",
+        "functions_code": "",
+        "code": "empowered_essence = ocr(\"Empowered Essence\", r\"(\\d+)/\")\nmalignant_essence = ocr(\"Malignant Essence\", r\"(\\d+)/\")\nmy_current_class = ocr(\"MyCurrentClass\", r\"^[^,]+\")\n\nlog(empowered_essence)\nlog(malignant_essence)\n\nmode = variables.get(\"mode\", \"EMP\")\n\ncheck_emp = empowered_essence > 950\ncheck_mal = malignant_essence > 3\n\nif check_emp and check_mal:\n mode = \"TURN\"\n\n# Empowered Essence Mode\nif mode == \"EMP\":\n\tif my_current_class != \"Dragon of Time\":\n\t\tplay(\"ChangeToDOT\")\n\t\tplay(\"GoToShadowRealm\")\n\n\tplay(\"\")\n\n\tif empowered_essence > 950:\n\t\tmode = \"MAL\"\n\n\n# Malignant Essence Mode\nelif mode == \"MAL\":\n\tif my_current_class != \"Chrono ShadowHunter\":\n\t\tplay(\"ChangeToCSH\")\n\t\tplay(\"GoToShadowLord\")\n\n\tplay(\"\")\n\n\tif malignant_essence > 3:\n\t\tmode = \"EMP\"\n\n\nelif mode == \"TURN\":\n\tplay(\"\")\n\tmode = \"EMP\"\n\nvariables[\"mode\"] = mode",
+        "sync_vars": {}
+      }
+    },
+    {
+      "id": "db675921",
+      "type": "ocr",
+      "x": -477.79348853159377,
+      "y": -228.15413175620927,
+      "props": {
+        "region": "Malignant Essence",
+        "interval_seconds": 0.1,
+        "extract_pattern": "(\\d+)/",
+        "last_value": "3"
+      }
+    },
+    {
+      "id": "a6952f04",
+      "type": "ocr",
+      "x": -479.34702523130653,
+      "y": -319.7551884437129,
+      "props": {
+        "region": "Empowered Essence",
+        "interval_seconds": 0.1,
+        "extract_pattern": "(\\d+)/",
+        "last_value": "657"
+      }
+    },
+    {
+      "id": "179cc2b9",
+      "type": "recorded_block",
+      "x": -989.4215292260801,
+      "y": -428.4187261345532,
+      "props": {
+        "recording": "ChangeToCSH",
+        "repeat": 1,
+        "speed": 1.5
+      }
+    },
+    {
+      "id": "dc4987d0",
+      "type": "recorded_block",
+      "x": -987.7218609561434,
+      "y": -350.2339857174534,
+      "props": {
+        "recording": "ChangeToDOT",
+        "repeat": 1,
+        "speed": 1.5
+      }
+    },
+    {
+      "id": "aa9cf4ad",
+      "type": "recorded_block",
+      "x": -663.0852213981852,
+      "y": -423.31972132474243,
+      "props": {
+        "recording": "GoToShadowLord",
+        "repeat": 1,
+        "speed": 1.7
+      }
+    },
+    {
+      "id": "3f158073",
+      "type": "recorded_block",
+      "x": -659.6858848583115,
+      "y": -343.43531263770564,
+      "props": {
+        "recording": "GoToShadowRealm",
+        "repeat": 1,
+        "speed": 1.7
+      }
+    },
+    {
+      "id": "7a577474",
+      "type": "ocr",
+      "x": -481.0114600124106,
+      "y": -418.753624503918,
+      "props": {
+        "region": "MyCurrentClass",
+        "interval_seconds": 0.1,
+        "extract_pattern": "^[^,]+",
+        "last_value": "Dragon of Time"
+      }
+    },
+    {
+      "id": "d7d34432",
+      "type": "set_variable",
+      "x": -986.3581452297022,
+      "y": -266.828378426466,
+      "props": {
+        "name": "mode",
+        "source_type": "literal",
+        "literal_value": "MAL",
+        "source_node": "",
+        "source_label": ""
+      }
+    },
+    {
+      "id": "6e1424f0",
+      "type": "code",
+      "x": -880.4322423715115,
+      "y": 42.91215723878234,
+      "props": {
+        "setup_code": "",
+        "functions_code": "",
+        "code": "empowered_essence = ocr(\"Empowered Essence\", r\"(\\d+)/\")\nmalignant_essence = ocr(\"Malignant Essence\", r\"(\\d+)/\")\nmy_current_class = ocr(\"MyCurrentClass\", r\"^[^,]+\")\nmy_current_area = ocr(\"MyCurrentArea\", r\"(?<=in\\s)\\S+\")\ndeath_message = ocr(\"DeathMessage\")\n\nmy_current_area = my_current_area.split(\"-\")[0] if my_current_area is not None else None\n\nempowered_essence = int(empowered_essence) if empowered_essence is not None else None\n\nmalignant_essence = int(malignant_essence) if malignant_essence is not None else None\n\nmonster_name = ocr(\"MonsterName\")\n\nlog(empowered_essence)\nlog(malignant_essence)\nlog(my_current_class)\nlog(my_current_area)\n\n\nMULTIPLIER = 19\nEMP_TARGET = 50 * MULTIPLIER\nMAL_TARGET = 3 * MULTIPLIER\n\nif death_message == \"DEATH\":\n\tsleep(10)\n\tplay(\"GoToBattleon\")\n\tsleep(1.5)\n\n\t\n\n\nif empowered_essence is not None and empowered_essence <= EMP_TARGET:\n\tif my_current_area != \"shadowrealmpast\":\n\t\tsleep(0.5)\n\t\tplay(\"GoToShadowRealm\")\n\t\tsleep(0.5)\n\t\n#\tif my_current_class != \"Dragon of Time\":\n#\t\tsleep(0.5)\n#\t\tplay(\"ChangeToDOT\")\n#\t\tsleep(0.5)\n\t\n\tplay(\"Find Enemy\")\n\tsleep(0.5)\n\tplay(\"CSH Combo\")\n\tplay(\"CSH Combo\")\n\tplay(\"CSH Combo\")\n\tplay(\"CSH Combo\")\n\n\t\t\n\nelif malignant_essence is not None and malignant_essence <= MAL_TARGET :\n\tif my_current_area != \"shadowlord\":\n\t\tsleep(0.5)\n\t\tplay(\"GoToShadowLord\")\n\t\tsleep(0.5)\n\n#\tif my_current_class != \"Chrono ShadowHunter\":\n#\t\tsleep(0.5)\n#\t\tplay(\"ChangeToCSH\")\n#\t\tsleep(0.5)\n\n\t\n\tplay(\"Find Enemy\")\n\tsleep(0.5)\n\tplay(\"CSH Combo\")\n\tsleep(1)\n\nelse:\n\tsleep(0.5)\n\tmessage = f\"Turned it Quest! {MULTIPLIER}x\"\n\tplay(\"TurnInVoidAuraQuest\")\n\tlog(message)\n\ttelegram(message)\n\tplay(\"XAcceptItems\")\n\tsleep(1)",
+        "sync_vars": {}
+      }
+    },
+    {
+      "id": "a117c87a",
+      "type": "ocr",
+      "x": -476.4810542545284,
+      "y": -146.95161487547176,
+      "props": {
+        "region": "MyCurrentArea",
+        "interval_seconds": 0.1,
+        "extract_pattern": "(?<=in\\s)\\S+",
+        "last_value": null
+      }
+    },
+    {
+      "id": "532aa335",
+      "type": "recorded_block",
+      "x": -688.4514408802359,
+      "y": -218.90374041522747,
+      "props": {
+        "recording": "TurnInVoidAuraQuest",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "3f04a813",
+      "type": "recorded_block",
+      "x": -802.7929816360195,
+      "y": -512.9248452158139,
+      "props": {
+        "recording": "CSH Combo",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "cecfb504",
+      "type": "recorded_block",
+      "x": -632.1881430480248,
+      "y": -503.8501197590057,
+      "props": {
+        "recording": "DOT Combo",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "9f11f1a5",
+      "type": "ocr",
+      "x": -477.0775633821616,
+      "y": -472.1093766538138,
+      "props": {
+        "region": "MonsterName",
+        "interval_seconds": 0.1,
+        "extract_pattern": "",
+        "last_value": null
+      }
+    },
+    {
+      "id": "e5536ca9",
+      "type": "recorded_block",
+      "x": -1046.4600502312896,
+      "y": -524.1504867328139,
+      "props": {
+        "recording": "Find Enemy",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "7f739bf7",
+      "type": "recorded_block",
+      "x": -1296.4647804847148,
+      "y": -531.8295537674751,
+      "props": {
+        "recording": "ClickBack",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "85a7e152",
+      "type": "ocr",
+      "x": -462.3411319793703,
+      "y": -49.2660564295021,
+      "props": {
+        "region": "DeathMessage",
+        "interval_seconds": 0.1,
+        "extract_pattern": "",
+        "last_value": null
+      }
+    },
+    {
+      "id": "4c652b72",
+      "type": "recorded_block",
+      "x": -742.4132555329033,
+      "y": -118.28173299984155,
+      "props": {
+        "recording": "GoToBattleon",
+        "repeat": 1,
+        "speed": 1.5
+      }
+    },
+    {
+      "id": "93b0e622",
+      "type": "recorded_block",
+      "x": -942.6637534919687,
+      "y": -104.0435382063616,
+      "props": {
+        "recording": "XAcceptItems",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    },
+    {
+      "id": "4285ecc1",
+      "type": "code",
+      "x": -1210.9100213082615,
+      "y": 74.72360336409264,
+      "props": {
+        "setup_code": "",
+        "functions_code": "",
+        "code": "empowered_essence = ocr(\"Empowered Essence\", r\"(\\d+)/\")\nmalignant_essence = ocr(\"Malignant Essence\", r\"(\\d+)/\")\nmy_current_class = ocr(\"MyCurrentClass\", r\"^[^,]+\")\nmy_current_area = ocr(\"MyCurrentArea\", r\"(?<=in\\s)\\S+\")\ndeath_message = ocr(\"DeathMessage\")\n\nmy_current_area = my_current_area.split(\"-\")[0] if my_current_area is not None else None\n\nempowered_essence = int(empowered_essence) if empowered_essence is not None else None\n\nmalignant_essence = int(malignant_essence) if malignant_essence is not None else None\n\nmonster_name = ocr(\"MonsterName\")\n\nlog(empowered_essence)\nlog(malignant_essence)\nlog(my_current_class)\nlog(my_current_area)\n\n\nMULTIPLIER = 19\nEMP_TARGET = 50 * MULTIPLIER\nMAL_TARGET = 3 * MULTIPLIER\n\nif death_message == \"DEATH\":\n\tsleep(10)\n\tplay(\"GoToBattleon\")\n\tsleep(1.5)\n\n\t\n\n\nif empowered_essence is not None and empowered_essence <= EMP_TARGET:\n\tif my_current_area != \"shadowrealmpast\":\n\t\tsleep(0.5)\n\t\tplay(\"GoToShadowRealm\")\n\t\tsleep(0.5)\n\t\n\tif my_current_class != \"Dragon of Time\":\n\t\tsleep(0.5)\n\t\tplay(\"ChangeToDOT\")\n\t\tsleep(0.5)\n\t\n\tplay(\"Find Enemy\")\n\tsleep(0.5)\n\tplay(\"DOT Combo\")\n\n\t\t\n\nelif malignant_essence is not None and malignant_essence <= MAL_TARGET :\n\tif my_current_area != \"shadowlord\":\n\t\tsleep(0.5)\n\t\tplay(\"GoToShadowLord\")\n\t\tsleep(0.5)\n\n\tif my_current_class != \"Chrono ShadowHunter\":\n\t\tsleep(0.5)\n\t\tplay(\"ChangeToCSH\")\n\t\tsleep(0.5)\n\n\t\n\tplay(\"Find Enemy\")\n\tsleep(0.5)\n\tplay(\"CSH Combo\")\n\tsleep(1)\n\nelse:\n\tsleep(0.5)\n\tmessage = f\"Turned it Quest! {MULTIPLIER}x\"\n\tplay(\"TurnInVoidAuraQuest\")\n\tlog(message)\n\ttelegram(message)\n\tplay(\"XAcceptItems\")\n\tsleep(1)",
+        "sync_vars": {}
+      }
+    },
+    {
+      "id": "eb709bc3",
+      "type": "recorded_block",
+      "x": -602.1881430480248,
+      "y": -473.8501197590057,
+      "props": {
+        "recording": "CSH: 234(4)5",
+        "repeat": 1,
+        "speed": 1.0
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "082a7b82",
+      "from_node": "360908a3",
+      "from_port": "out",
+      "to_node": "5490da02",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "f9623b9c",
+      "from_node": "5490da02",
+      "from_port": "out",
+      "to_node": "6e1424f0",
+      "to_port": "in",
+      "log_message": ""
+    }
+  ]
+}

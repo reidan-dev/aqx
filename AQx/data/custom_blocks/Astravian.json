@@ -1,0 +1,12 @@
+{
+  "name": "Astravian",
+  "base_type": "code",
+  "props": {
+    "setup_code": "item_goal = 0\nMULTIPLIER = 6\n",
+    "functions_code": "def get_items_count(val=None):\n    list_of_items = [int(item) for item in ocr_lines(\"Items\", \"(\\d+)\")]\n    log(list_of_items)\n    if val is not None:\n        val -= 1\n        return list_of_items[val]\n    return list_of_items\n\n\ndef get_quest_items(required_cnt, current_cnt_fn, attack_steps, next_steps):\n    total_required_cnt = required_cnt * MULTIPLIER\n    while True:\n        current_cnt = current_cnt_fn()\n        log(f\"{current_cnt}/{total_required_cnt}\")\n        if current_cnt == total_required_cnt:\n            for next_step in next_steps:\n                next_step()\n            break\n\n        sleep(1)\n        for attack_step in attack_steps:\n            attack_step()\n",
+    "code": "get_quest_items(\n    7,\n    lambda: get_items_count(1),\n    [lambda: play(\"KE v1\")],\n    [\n        lambda: sleep(1),\n        lambda: play(\"Move Right\", repeat=3),\n        lambda: sleep(1),\n        lambda: play(\"Move Center\"),\n    ],\n)\n\nget_quest_items(\n    7,\n    lambda: get_items_count(2),\n    [lambda: play(\"KE v1\")],\n    [\n        lambda: sleep(1),\n        lambda: play(\"Move Right\", repeat=2),\n        lambda: sleep(1),\n        lambda: play(\"Move Center\"),\n    ],\n)\n\nget_quest_items(\n    7,\n    lambda: get_items_count(3),\n    [lambda: play(\"KE v1\")],\n    [\n        lambda: sleep(1),\n        lambda: play(\"Back to Start\"),\n        lambda: sleep(1),\n        lambda: play(\"Turn In Quest\"),\n    ],\n)\n\nitem_goal += MULTIPLIER\ntelegram(f\"Mourning Flower: {item_goal}/66\")\n",
+    "sync_vars": {
+      "item_goal": 45
+    }
+  }
+}

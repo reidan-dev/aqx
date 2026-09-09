@@ -1,0 +1,176 @@
+{
+  "version": 1,
+  "repeat": 0,
+  "nodes": [
+    {
+      "id": "dead28b0",
+      "type": "start",
+      "x": -380,
+      "y": 40,
+      "props": {}
+    },
+    {
+      "id": "306f271c",
+      "type": "recorded_block",
+      "x": -220,
+      "y": 140,
+      "props": {
+        "recording": "Find Enemy",
+        "repeat": 1
+      }
+    },
+    {
+      "id": "6231b99a",
+      "type": "ocr",
+      "x": -60,
+      "y": 90,
+      "props": {
+        "region": "Enemy Name",
+        "interval_seconds": 0.1,
+        "extract_pattern": "",
+        "last_value": null
+      }
+    },
+    {
+      "id": "b69568e1",
+      "type": "for_loop",
+      "x": 100,
+      "y": 40,
+      "props": {
+        "count": 500
+      }
+    },
+    {
+      "id": "78af57fb",
+      "type": "recorded_block",
+      "x": 100,
+      "y": 140,
+      "props": {
+        "recording": "CSH: 234(4)5",
+        "repeat": 1
+      }
+    },
+    {
+      "id": "a9630b67",
+      "type": "loop_exit",
+      "x": 260,
+      "y": 140,
+      "props": {
+        "condition": {
+          "source_type": "ocr",
+          "source_node": "ae2f4eb6",
+          "source_label": "Enemy Name",
+          "source_name": "",
+          "operator": "contains",
+          "compare_to": "AKRILOTH",
+          "negate": true
+        }
+      }
+    },
+    {
+      "id": "2043bdd8",
+      "type": "until_loop",
+      "x": -220,
+      "y": 40,
+      "props": {
+        "condition": {
+          "source_type": "ocr",
+          "source_node": "6231b99a",
+          "source_label": "Enemy Name",
+          "source_name": "",
+          "operator": "contains",
+          "compare_to": "AKRILOTH",
+          "negate": false
+        }
+      }
+    },
+    {
+      "id": "549bdec0",
+      "type": "recorded_block",
+      "x": 260,
+      "y": 40,
+      "props": {
+        "recording": "Press X",
+        "repeat": 1
+      }
+    },
+    {
+      "id": "ae2f4eb6",
+      "type": "ocr",
+      "x": 100,
+      "y": 220,
+      "props": {
+        "region": "Enemy Name",
+        "interval_seconds": 0.1,
+        "extract_pattern": "",
+        "last_value": null
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "73c8f0f1",
+      "from_node": "dead28b0",
+      "from_port": "out",
+      "to_node": "2043bdd8",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "e87e5385",
+      "from_node": "2043bdd8",
+      "from_port": "body",
+      "to_node": "306f271c",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "656bbfa3",
+      "from_node": "306f271c",
+      "from_port": "out",
+      "to_node": "6231b99a",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "1dd3295a",
+      "from_node": "2043bdd8",
+      "from_port": "done",
+      "to_node": "b69568e1",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "6527c947",
+      "from_node": "b69568e1",
+      "from_port": "body",
+      "to_node": "78af57fb",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "99cac77f",
+      "from_node": "b69568e1",
+      "from_port": "done",
+      "to_node": "549bdec0",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "9df04181",
+      "from_node": "78af57fb",
+      "from_port": "out",
+      "to_node": "ae2f4eb6",
+      "to_port": "in",
+      "log_message": ""
+    },
+    {
+      "id": "c081cbf0",
+      "from_node": "ae2f4eb6",
+      "from_port": "out",
+      "to_node": "a9630b67",
+      "to_port": "in",
+      "log_message": ""
+    }
+  ]
+}
