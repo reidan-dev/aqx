@@ -17,6 +17,16 @@ class Settings:
     last_flow_path: str = ""
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
+    mouse_guard_enabled: bool = True
+    # px/sec of real mouse movement (smoothed over ~80ms) that counts as "aggressive" -
+    # calibrated from one real session: ordinary movement peaked ~9700 px/sec, a
+    # deliberate fast swipe reached ~20300 px/sec. Expect to retune per machine/mouse.
+    mouse_guard_threshold: float = 15000.0
+    # What triggering the guard actually does: "stop" ends the run outright (the
+    # original behavior); "pause" just pauses it, same as the pause hotkey, so a
+    # sudden grab for the real mouse doesn't lose an otherwise-fine run - resume
+    # normally once you're back in control.
+    mouse_guard_action: str = "stop"
 
     @staticmethod
     def load() -> "Settings":

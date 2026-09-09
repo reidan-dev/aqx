@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QDoubleSpinBox,
     QHBoxLayout,
     QInputDialog,
     QLabel,
@@ -46,6 +47,7 @@ class RecordBlockDialog(QDialog):
         repeat: int,
         settings: Settings,
         global_stop: Optional[GlobalEmergencyStop] = None,
+        speed: float = 1.0,
     ):
         super().__init__(parent)
         self.setWindowTitle("Record Block")
@@ -53,6 +55,7 @@ class RecordBlockDialog(QDialog):
         self.global_stop = global_stop
         self.selected_recording = recording
         self.selected_repeat = repeat
+        self.selected_speed = speed
         self.recorder: Optional[Recorder] = None
         self.overlay = CountdownOverlay()
         self._global_stop_paused = False
@@ -92,6 +95,17 @@ class RecordBlockDialog(QDialog):
         self.repeat_spin.setValue(repeat)
         repeat_row.addWidget(self.repeat_spin)
         layout.addLayout(repeat_row)
+
+        speed_row = QHBoxLayout()
+        speed_row.addWidget(QLabel("Speed (1.0 = as recorded):"))
+        self.speed_spin = QDoubleSpinBox()
+        self.speed_spin.setRange(0.01, 100.0)
+        self.speed_spin.setSingleStep(0.1)
+        self.speed_spin.setDecimals(2)
+        self.speed_spin.setSuffix("x")
+        self.speed_spin.setValue(speed)
+        speed_row.addWidget(self.speed_spin)
+        layout.addLayout(speed_row)
 
         layout.addWidget(QLabel("Record new input:"))
         mode_row = QHBoxLayout()
@@ -264,5 +278,6 @@ class RecordBlockDialog(QDialog):
     def accept(self) -> None:
         self.selected_recording = self.combo.currentText()
         self.selected_repeat = self.repeat_spin.value()
+        self.selected_speed = self.speed_spin.value()
         self._resume_global_stop()
         super().accept()

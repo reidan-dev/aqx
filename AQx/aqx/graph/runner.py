@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import json
 import random
 import re
@@ -84,6 +85,24 @@ class SkillRef:
                 raise _CodeStopped()
             elapsed += poll
 
+    def spam_press(self, poll: float = 0.05, max_presses: Optional[int] = None) -> int:
+        """The opposite of wait_and_press: presses this slot immediately, then
+        keeps re-checking every `poll` seconds and pressing again for as long as
+        it's still off cooldown, stopping the instant a live re-read finds it on
+        cooldown (or, if given, after `max_presses` presses land). Useful for a
+        skill that stays clickable across several rapid taps before it actually
+        goes on cooldown. Returns how many presses landed. Like the other
+        blocking helpers, a Stop mid-wait unwinds the whole script rather than
+        returning normally."""
+        count = 0
+        while self.press():
+            count += 1
+            if max_presses is not None and count >= max_presses:
+                break
+            if not self._waiter(poll):
+                raise _CodeStopped()
+        return count
+
     def __bool__(self) -> bool:
         return self.is_ready()
 
@@ -128,6 +147,7 @@ class SkillsHandle:
 
 class GraphRunner(QObject):
     status = Signal(str)
+    error = Signal(str, str)  # node_id, message - a Code block exception (also stops the run)
     node_started = Signal(str)
     node_updated = Signal(str)
     finished = Signal()
@@ -157,6 +177,16 @@ class GraphRunner(QObject):
         self._run_started_at: float = 0.0  # time.monotonic() at the top of run() - what a Turn Off block counts from
         self._turn_off_armed: bool = False  # a Turn Off block only arms its timer once per run(), even if reached again
         self._turn_off_timer: Optional[threading.Timer] = None
+        self._code_error = False  # a Code block exception fired this run - suppresses the redundant Stopped./Done. message
+        # Per Code-block-node state for the setup()/loop() split - a node's namespace
+        # (so functions/variables setup() declares are still there for loop(), on
+        # this call and every later one) plus whether its setup() has already run
+        # this run() - both keyed by node id since a flow can have more than one
+        # Code block, and both reset per run() (see run()), not per lap: setup()
+        # means "once ever this run", regardless of how many laps or how many times
+        # an inner loop revisits this node.
+        self._code_namespaces: Dict[str, Dict[str, Any]] = {}
+        self._code_setup_done: set = set()
 
     def _wait_while_paused(self) -> bool:
         """Blocks while paused, still watching stop_flag. Returns False if stopped
@@ -263,7 +293,13 @@ class GraphRunner(QObject):
 
     def _press_slot_key(self, index: int) -> None:
         """Taps row `index`'s (1-based) configured key, unconditionally - callers
-        decide whether it's actually ready first."""
+        decide whether it's actually ready first. Blocks on pause right before the
+        real keystroke goes out - this is the one choke point every press reaches
+        (the Skills block's own chain execution below, and a Code block's
+        skills().press()/press_ready()/wait_and_press()), none of which otherwise
+        pass through a pause check of their own."""
+        if not self._wait_while_paused():
+            return
         if self._keyboard is None:
             self._keyboard = keyboard.Controller()
         key = key_from_name(self._skill_slots[index - 1]["key"])
@@ -273,6 +309,8 @@ class GraphRunner(QObject):
     def _execute_skills(self, node: Node) -> Optional[str]:
         for index in range(1, len(self._skill_slots) + 1):
             if self.stop_flag.is_set():
+                return None
+            if not self._wait_while_paused():
                 return None
             if self._read_slot_ready(index):
                 self._press_slot_key(index)
@@ -316,10 +354,13 @@ class GraphRunner(QObject):
         self._run_started_at = time.monotonic()
         self._turn_off_armed = False
         self._turn_off_timer = None
+        self._code_error = False
         # Reset once per run(), not per loop iteration or per flow-repeat, so "max
         # sends" caps the total across the whole run - exactly the "despite being
         # called many times" case a loop body creates.
         self._telegram_send_counts = {}
+        self._code_namespaces = {}
+        self._code_setup_done = set()
         repeat = self.graph.repeat  # 0 = infinite
         count = 0
         aborted = False
@@ -351,7 +392,7 @@ class GraphRunner(QObject):
             if self._turn_off_timer is not None:
                 self._turn_off_timer.cancel()
 
-        if not aborted:
+        if not aborted and not self._code_error:
             self.status.emit("Stopped." if self.stop_flag.is_set() else "Done.")
         self.finished.emit()
 
@@ -475,21 +516,39 @@ class GraphRunner(QObject):
         data = json.loads(path.read_text())
         events = [InputEvent.from_dict(e) for e in data.get("events", [])]
         repeat = int(node.props.get("repeat", 1))
-        Player(events, self.stop_flag, speed=1.0, pause_flag=self.pause_flag).run(repeat=repeat)
+        speed = float(node.props.get("speed", 1.0))
+        Player(events, self.stop_flag, speed=speed, pause_flag=self.pause_flag).run(repeat=repeat)
+
+    _OCR_READ_ATTEMPTS = 3
+    _OCR_RETRY_DELAY = 0.08
 
     def _read_ocr_region(self, region_name: str) -> Any:
         """Live-reads a named OCR region right now (capture + text recognition, no
         caching). Shared by a chain-walked OCR node's own execution and by any
         condition (If/While/Until) that references an OCR reading, so a loop
         condition always sees the screen as it is at each check - not a value cached
-        from whenever some OCR node last happened to run as a regular chain step."""
+        from whenever some OCR node last happened to run as a regular chain step.
+
+        Retries a few times on a miss, re-capturing each attempt rather than
+        re-running Vision on the same pixels - a single frame's rendering (glow,
+        animation, compositing, sub-pixel anti-aliasing on the digits) can make
+        Vision return nothing even though the text is clearly there; the next
+        frame's capture is often just different enough to read cleanly."""
         try:
             region = Region.load(region_name)
         except FileNotFoundError:
             self.status.emit(f"OCR region not found: {region_name}")
             return None
-        image_ref = capture_cgimage(region.x, region.y, region.width, region.height)
-        return read_text_from_cgimage(image_ref)
+        for attempt in range(self._OCR_READ_ATTEMPTS):
+            image_ref = capture_cgimage(region.x, region.y, region.width, region.height)
+            text = read_text_from_cgimage(image_ref) if image_ref is not None else None
+            if text is not None:
+                return text
+            if attempt < self._OCR_READ_ATTEMPTS - 1:
+                if self.stop_flag.is_set():
+                    return None
+                time.sleep(self._OCR_RETRY_DELAY)
+        return None
 
     def _apply_extract(self, node: Node, value: Any) -> Any:
         pattern = node.props.get("extract_pattern")
@@ -654,16 +713,30 @@ class GraphRunner(QObject):
         return None
 
     def _execute_code(self, node: Node) -> bool:
-        """Runs a Code node's script with a small fixed namespace - `variables` is
-        the same dict every other block reads/writes, so the script's edits are
-        visible immediately to whatever runs next. Branching/looping is left to the
-        script's own Python control flow rather than modeled as extra output ports -
-        there's always exactly one continuation ("out") once the script returns.
-        An exception is logged with its traceback but never halts the flow, matching
-        Log/Telegram; only a Stop mid-sleep()/play()/keystroke() unwinds the script
-        early (via _CodeStopped) and returns False so the chain itself also stops."""
+        """Runs a Code node's setup()/functions()/loop() split with a small fixed
+        namespace - `variables` is the same dict every other block reads/writes, so
+        the script's edits are visible immediately to whatever runs next.
+        setup_code runs once - the first time this specific node is reached in this
+        run() (see _code_setup_done) - and functions_code then code (the loop()
+        body) run on every visit, including that first one, always functions_code
+        before code, right after setup_code. All three share one namespace dict,
+        persisted per node id in _code_namespaces, so a function or variable any of
+        them declares is still there for whatever runs after it - this call and
+        every later one - not just local to a single exec(). functions_code exists
+        purely to keep helper `def`s out of the way of loop()'s main logic; nothing
+        about it is special beyond running first each lap. Branching/looping within
+        any of the three is left to normal Python control flow rather than modeled
+        as extra output ports - there's always exactly one continuation ("out")
+        once the loop() body returns. An exception is logged with its traceback
+        (via `status`, and separately via `error` so the mini toolbar can surface it
+        even once minimized/backgrounded), then stops the run - same as a Stop
+        mid-sleep()/play()/keystroke() unwinding the script early via _CodeStopped,
+        just via stop_flag instead so it also aborts any further laps rather than
+        just this chain."""
+        setup_code = str(node.props.get("setup_code", ""))
+        functions_code = str(node.props.get("functions_code", ""))
         code = str(node.props.get("code", ""))
-        if not code.strip():
+        if not setup_code.strip() and not functions_code.strip() and not code.strip():
             return True
 
         def ocr_helper(region_name: str, pattern: Optional[str] = None) -> Any:
@@ -674,14 +747,37 @@ class GraphRunner(QObject):
                     self.status.emit(f"Code '{node.id}': invalid extract pattern in ocr() call ({error}) - using raw text.")
             return value
 
-        def play_helper(recording_name: str, repeat: int = 1) -> None:
+        def ocr_lines_helper(region_name: str, pattern: Optional[str] = None) -> Optional[list]:
+            """ocr_lines(region, pattern=None) - like ocr(), but reads the region as
+            multiple lines (blank lines dropped) and returns a list, one entry per
+            line, instead of one combined string. With a pattern, that same regex is
+            applied to each line independently - a line with no match becomes None
+            in the list (same "no match" convention as a single ocr() call), rather
+            than one pattern matched once against the whole block. Assign the
+            result straight to a variable, e.g. variables["items"] = ocr_lines(...)."""
+            text = self._read_ocr_region(region_name)
+            if text is None:
+                return None
+            lines = [line for line in text.split("\n") if line.strip()]
+            if not pattern:
+                return lines
+            results = []
+            for line in lines:
+                result, error = apply_extract_pattern(line, pattern)
+                if error:
+                    self.status.emit(f"Code '{node.id}': invalid extract pattern in ocr_lines() call ({error}) - using raw lines.")
+                    return lines
+                results.append(result)
+            return results
+
+        def play_helper(recording_name: str, repeat: int = 1, speed: float = 1.0) -> None:
             path = self.recordings_dir / f"{recording_name}.json"
             if not path.exists():
                 self.status.emit(f"Code '{node.id}': recording not found: {recording_name}")
                 return
             data = json.loads(path.read_text())
             events = [InputEvent.from_dict(e) for e in data.get("events", [])]
-            Player(events, self.stop_flag, speed=1.0, pause_flag=self.pause_flag).run(repeat=int(repeat))
+            Player(events, self.stop_flag, speed=float(speed), pause_flag=self.pause_flag).run(repeat=int(repeat))
             if self.stop_flag.is_set():
                 raise _CodeStopped()
 
@@ -733,21 +829,90 @@ class GraphRunner(QObject):
                 self.status.emit("skills(): no Skills block (or no rows in it) found in this flow.")
             return SkillsHandle(refs, waiter=self._sleep_interruptible)
 
-        namespace: Dict[str, Any] = {
+        _SYNC_CALL_RE = re.compile(r'\b(?:sync|save)\(\s*([A-Za-z_]\w*)\s*\)')
+
+        def sync_helper(value: Any) -> Any:
+            """sync(x) / save(x) - a plain checkpoint: writes x's current value onto
+            this Code block (node.props["sync_vars"][x's name]), so it's included
+            whenever the flow is next saved and survives Stop -> Run again (even an
+            app restart, once saved). Must be called with a single bare variable
+            name - the name itself isn't passed as an argument, it's recovered from
+            the call site's own source line (there's no other way to know "x" was
+            the name behind the value that got passed in).
+
+            Nothing but checkpointing happens here - restoring a persisted value
+            back into setup()'s variable on the *next* run is handled separately,
+            automatically, right after setup_code runs (see the "auto-restore"
+            block below), using whatever this checkpointed last. That split is
+            what makes call order not matter: sync(x) after modifying x always
+            saves the new value, never the old one."""
+            frame = inspect.currentframe().f_back
+            filename = frame.f_code.co_filename
+            if filename.endswith(" setup>"):
+                source = setup_code
+            elif filename.endswith(" functions>"):
+                source = functions_code
+            else:
+                source = code
+            lines = source.splitlines()
+            line = lines[frame.f_lineno - 1] if 0 <= frame.f_lineno - 1 < len(lines) else ""
+            match = _SYNC_CALL_RE.search(line)
+            if not match:
+                raise ValueError(
+                    "sync()/save() must be called with a single bare variable name, e.g. sync(x) - "
+                    f"couldn't find that on the call's source line: {line.strip()!r}"
+                )
+            name = match.group(1)
+            node.props.setdefault("sync_vars", {})[name] = value
+            return value
+
+        # Persisted per node id (see __init__/run()) so setup_code's functions/
+        # variables are still there for code on this call and every later one - the
+        # helper bindings themselves are rebound fresh each call (harmless - they
+        # just close over self/node, no per-call state of their own) so they always
+        # point at this call's closures.
+        namespace = self._code_namespaces.setdefault(node.id, {})
+        namespace.update({
             "variables": self.variables,
             "ocr": ocr_helper,
+            "ocr_lines": ocr_lines_helper,
             "play": play_helper,
             "log": log_helper,
             "sleep": sleep_helper,
             "telegram": telegram_helper,
             "keystroke": keystroke_helper,
             "skills": skills_helper,
+            "sync": sync_helper,
+            "save": sync_helper,
             "stop_requested": lambda: self.stop_flag.is_set(),
-        }
+        })
+        run_setup = node.id not in self._code_setup_done
+        self._code_setup_done.add(node.id)
         try:
-            exec(compile(code, f"<code block {node.id}>", "exec"), namespace)
+            if run_setup and setup_code.strip():
+                exec(compile(setup_code, f"<code block {node.id} setup>", "exec"), namespace)
+            if run_setup:
+                # Auto-restore: whatever a previous run last sync()/save()'d for
+                # this node overwrites setup_code's just-assigned value here - so
+                # the "declare a default, then sync() it once it changes" pattern
+                # in this Code block's docstring/reference actually results in
+                # "starts from wherever it was left" on the next run, with no
+                # extra restore call needed. Only happens the one time setup_code
+                # itself runs, not every lap - after this, ordinary lap-to-lap
+                # persistence is just normal Python (the namespace dict itself).
+                for name, value in node.props.get("sync_vars", {}).items():
+                    namespace[name] = value
+            if functions_code.strip():
+                exec(compile(functions_code, f"<code block {node.id} functions>", "exec"), namespace)
+            if code.strip():
+                exec(compile(code, f"<code block {node.id} loop>", "exec"), namespace)
         except _CodeStopped:
             return False
         except Exception:
-            self.status.emit(f"Code '{node.id}' error:\n{traceback.format_exc()}")
+            message = f"Code '{node.id}' error:\n{traceback.format_exc()}"
+            self.status.emit(message)
+            self.error.emit(node.id, message)
+            self._code_error = True
+            self.stop_flag.set()
+            return False
         return True

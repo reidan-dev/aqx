@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from PySide6.QtCore import QRect
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -52,12 +53,16 @@ class OCRNodeDialog(QDialog):
         self.select_btn.clicked.connect(self._select_new_region)
         region_btn_row.addWidget(self.select_btn)
         self.replace_btn = QPushButton("Replace This Region...")
-        self.replace_btn.setToolTip("Redraw the area for the selected region, keeping its name (and anywhere it's referenced) unchanged.")
+        self.replace_btn.setToolTip("Redraw the area for the selected region from scratch, keeping its name (and anywhere it's referenced) unchanged.")
         self.replace_btn.clicked.connect(self._replace_current_region)
         region_btn_row.addWidget(self.replace_btn)
+        self.view_edit_btn = QPushButton("View / Edit Region...")
+        self.view_edit_btn.setToolTip("Shows this region's outline live over the real screen, with drag handles so you can resize and reposition it in place instead of redrawing from scratch.")
+        self.view_edit_btn.clicked.connect(self._view_edit_region)
+        region_btn_row.addWidget(self.view_edit_btn)
         layout.addLayout(region_btn_row)
-        self.combo.currentTextChanged.connect(lambda _: self._update_replace_enabled())
-        self._update_replace_enabled()
+        self.combo.currentTextChanged.connect(lambda _: self._update_region_buttons_enabled())
+        self._update_region_buttons_enabled()
 
         interval_row = QHBoxLayout()
         interval_row.addWidget(QLabel("Read every (seconds):"))
@@ -109,15 +114,19 @@ class OCRNodeDialog(QDialog):
         if select and select in names:
             self.combo.setCurrentText(select)
 
-    def _update_replace_enabled(self) -> None:
-        self.replace_btn.setEnabled(bool(self.combo.currentText().strip()))
+    def _update_region_buttons_enabled(self) -> None:
+        has_region = bool(self.combo.currentText().strip())
+        self.replace_btn.setEnabled(has_region)
+        self.view_edit_btn.setEnabled(has_region)
 
     def _set_pick_busy(self, busy: bool) -> None:
         # Guards against launching two overlapping RegionPickers (each starts its own
         # pynput mouse listener) if the user clicks a second picker button while one
         # is still active.
+        has_region = bool(self.combo.currentText().strip())
         self.select_btn.setEnabled(not busy)
-        self.replace_btn.setEnabled(not busy and bool(self.combo.currentText().strip()))
+        self.replace_btn.setEnabled(not busy and has_region)
+        self.view_edit_btn.setEnabled(not busy and has_region)
 
     def _select_new_region(self) -> None:
         # Deliberately not hiding this dialog - the toolbar is freely draggable, so
@@ -154,6 +163,22 @@ class OCRNodeDialog(QDialog):
         Region(name=name, x=x, y=y, width=w, height=h).save()
         self._reload_regions(select=name)
         self.result_label.setText(f"Replaced region '{name}'.")
+
+    def _view_edit_region(self) -> None:
+        """Like _replace_current_region, but starts the picker already showing this
+        region's saved rect - live over the real screen, with resize handles active
+        immediately - instead of making the user redraw it from scratch just to
+        nudge it into place."""
+        name = self.combo.currentText().strip()
+        if not name:
+            return
+        region = Region.load(name)
+        rect = QRect(int(region.x), int(region.y), int(region.width), int(region.height))
+        self._set_pick_busy(True)
+        self._picker = RegionPicker(self)
+        self._picker.region_selected.connect(lambda x, y, w, h, name=name: self._on_region_replaced(name, x, y, w, h))
+        self._picker.cancelled.connect(self._on_region_pick_cancelled)
+        self._picker.edit(rect)
 
     def _on_region_pick_cancelled(self) -> None:
         self._set_pick_busy(False)

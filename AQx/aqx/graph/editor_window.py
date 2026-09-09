@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 
 from ..config import Settings
 from ..emergency import GlobalEmergencyStop
+from ..mouse_guard import MouseAggressionGuard
 from ..overlay import CountdownOverlay
 from ..paths import FLOWS_DIR, RECORDINGS_DIR
 from ..recording.player import PauseFlag, StopFlag
@@ -59,6 +60,7 @@ class GraphEditorWindow(QMainWindow):
     """The main (and only) AQx window: node graph canvas, palette, and execution log."""
 
     hotkey_triggered = Signal()  # emitted (from any thread) whenever the global hotkey fires
+    mouse_guard_triggered = Signal()  # emitted (from the guard's own listener thread) on an aggressive real mouse move
 
     def __init__(
         self,
@@ -78,9 +80,15 @@ class GraphEditorWindow(QMainWindow):
         self.current_flow_path: Optional[Path] = None
         self._palette_types = list(NODE_SPECS.keys())
         self._is_running = False
+        self._pending_code_error = False  # forces the mini toolbar to stay up so an in-run Code error is seen even after the run stops
         self.pause_flag = PauseFlag()
         self._last_hotkey_time = 0.0
         self.hotkey_triggered.connect(self._on_hotkey_triggered)
+        # Created once, for the app's whole lifetime - see MouseAggressionGuard's
+        # own docstring for why (repeatedly creating/tearing down its CGEventTap
+        # per run was destabilizing the unrelated global hotkey listener).
+        self.mouse_guard = MouseAggressionGuard(self.settings.mouse_guard_threshold, self.mouse_guard_triggered.emit)
+        self.mouse_guard_triggered.connect(self._on_mouse_guard_triggered)
 
         app = QApplication.instance()
         if app is not None:
@@ -101,6 +109,7 @@ class GraphEditorWindow(QMainWindow):
         self.mini_toolbar.maximize_clicked.connect(self._restore_from_mini)
         self.mini_toolbar.settings_clicked.connect(self._open_settings)
         self.mini_toolbar.control_value_changed.connect(self._on_control_value_changed)
+        self.mini_toolbar.error_dismissed.connect(self._on_mini_error_dismissed)
 
         self.run_overlay = CountdownOverlay()
         self._run_countdown_timer = QTimer(self)
@@ -321,11 +330,20 @@ class GraphEditorWindow(QMainWindow):
         if dlg.selected_telegram_chat_id != self.settings.telegram_chat_id:
             self.settings.telegram_chat_id = dlg.selected_telegram_chat_id
             changed = True
+        if dlg.selected_mouse_guard_enabled != self.settings.mouse_guard_enabled:
+            self.settings.mouse_guard_enabled = dlg.selected_mouse_guard_enabled
+            changed = True
+        if dlg.selected_mouse_guard_threshold != self.settings.mouse_guard_threshold:
+            self.settings.mouse_guard_threshold = dlg.selected_mouse_guard_threshold
+            changed = True
+        if dlg.selected_mouse_guard_action != self.settings.mouse_guard_action:
+            self.settings.mouse_guard_action = dlg.selected_mouse_guard_action
+            changed = True
         if changed:
             self.settings.save()
 
     def _log(self, text: str) -> None:
-        self.log_view.appendPlainText(f"[{time.strftime('%H:%M:%S')}] {text}")
+        self.log_view.appendPlainText(f"[{time.strftime('%I:%M:%S %p')}] {text}")
 
     def show_permission_warning(self, message: str) -> None:
         """Called from main() when the global hotkey listener failed to start (almost
@@ -432,10 +450,12 @@ class GraphEditorWindow(QMainWindow):
                 int(node.props.get("repeat", 1)),
                 self.settings,
                 self.global_stop,
+                speed=float(node.props.get("speed", 1.0)),
             )
             if dlg.exec() == QDialog.Accepted:
                 node.props["recording"] = dlg.selected_recording
                 node.props["repeat"] = dlg.selected_repeat
+                node.props["speed"] = dlg.selected_speed
         elif node.type == "ocr":
             # Shown non-modally (.show(), not .exec()): on macOS any modal QDialog
             # triggers a native Cocoa modal session that blocks mouse input to every
@@ -611,11 +631,23 @@ class GraphEditorWindow(QMainWindow):
             self.pause_flag.clear()
             self._log("Resumed.")
             self.statusBar().showMessage("Resumed", 3000)
+            self._update_pause_icon()
+            self._sync_mini_toolbar()
         else:
-            self.pause_flag.set()
-            self._log("Paused.")
-            key = self._hotkey_label()
-            self.statusBar().showMessage(f"Paused - {key} to resume, {key} twice quickly to stop", 4000)
+            self._pause()
+
+    def _pause(self, log_message: str = "Paused.") -> None:
+        """The actual "go to paused" half of _toggle_pause, pulled out so
+        something other than the pause hotkey/button - the mouse guard, when set
+        to "Pause the run" instead of "Stop the run" - can pause a run the same
+        way. A no-op if already paused (or not running), so a caller doesn't need
+        to check first."""
+        if not self._is_running or self.pause_flag.is_set():
+            return
+        self.pause_flag.set()
+        self._log(log_message)
+        key = self._hotkey_label()
+        self.statusBar().showMessage(f"Paused - {key} to resume, {key} twice quickly to stop", 4000)
         self._update_pause_icon()
         self._sync_mini_toolbar()
 
@@ -642,7 +674,11 @@ class GraphEditorWindow(QMainWindow):
         """The mini toolbar's whole purpose is giving Play/Pause/Stop access when the
         main window isn't what the user is looking at - which is just as true when
         another app is frontmost (AQx not minimized, just not the active app) as when
-        AQx is literally minimized. Only shown while a flow is actually running."""
+        AQx is literally minimized. Only shown while a flow is actually running, except
+        a pending Code-block error keeps it up (with the error message) even after the
+        run has stopped, until the user dismisses it or restores the window."""
+        if self._pending_code_error:
+            return True
         if not self._is_running:
             return False
         if self.isMinimized():
@@ -672,6 +708,8 @@ class GraphEditorWindow(QMainWindow):
         self._update_mini_toolbar_visibility()
 
     def _restore_from_mini(self) -> None:
+        self._pending_code_error = False
+        self.mini_toolbar.clear_error()
         self.showNormal()
         self.raise_()
         self.activateWindow()
@@ -711,11 +749,14 @@ class GraphEditorWindow(QMainWindow):
     def _run_now(self) -> None:
         self.stop_flag.clear()
         self.pause_flag.clear()
+        self._pending_code_error = False
+        self.mini_toolbar.clear_error()
         self._set_running_state(True)
         self.runner = GraphRunner(
             self.graph, self.stop_flag, RECORDINGS_DIR, pause_flag=self.pause_flag, settings=self.settings
         )
         self.runner.status.connect(self._on_runner_status, Qt.QueuedConnection)
+        self.runner.error.connect(self._on_runner_error, Qt.QueuedConnection)
         self.runner.node_started.connect(self._highlight_node, Qt.QueuedConnection)
         self.runner.node_updated.connect(self._refresh_node_summary, Qt.QueuedConnection)
         self.runner.finished.connect(self._on_run_finished, Qt.QueuedConnection)
@@ -723,14 +764,50 @@ class GraphEditorWindow(QMainWindow):
         self._log("Run started.")
         thread = threading.Thread(target=self.runner.run, daemon=True)
         thread.start()
+        self._start_mouse_guard()
+
+    def _start_mouse_guard(self) -> None:
+        """Armed here (once actual playback begins), not alongside
+        _set_running_state - that also covers the prep-delay countdown before a
+        Recorded Block flow starts, where the user is expected to be moving the
+        mouse to get their window ready. arm() is cheap (no OS-level tap churn -
+        see MouseAggressionGuard's docstring), so this is safe to call every run."""
+        if not self.settings.mouse_guard_enabled:
+            return
+        self.mouse_guard.threshold = self.settings.mouse_guard_threshold
+        self.mouse_guard.arm()
+
+    def _stop_mouse_guard(self) -> None:
+        self.mouse_guard.disarm()
+
+    def _on_mouse_guard_triggered(self) -> None:
+        if self.settings.mouse_guard_action == "pause":
+            self._pause("Aggressive mouse movement detected - pausing.")
+        else:
+            self._log("Aggressive mouse movement detected - stopping.")
+            self._stop()
 
     def _on_runner_status(self, text: str) -> None:
         self.statusBar().showMessage(text, 4000)
         self._log(text)
 
+    def _on_runner_error(self, node_id: str, message: str) -> None:
+        """A Code block error now stops the run (see GraphRunner._execute_code), so
+        unlike a plain status line this needs to stay visible even after the run
+        ends and the main window isn't in focus - the mini toolbar is the only
+        surface still up in that case."""
+        self._pending_code_error = True
+        self.mini_toolbar.show_error(message)
+        self._update_mini_toolbar_visibility()
+
+    def _on_mini_error_dismissed(self) -> None:
+        self._pending_code_error = False
+        self._update_mini_toolbar_visibility()
+
     def _on_run_finished(self) -> None:
         self._set_running_state(False)
         self.mini_toolbar.set_controls([])
+        self._stop_mouse_guard()
 
     def _on_controls_registered(self, controls: list) -> None:
         self.mini_toolbar.set_controls(controls)

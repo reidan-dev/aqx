@@ -43,6 +43,7 @@ class MiniRunToolbar(QWidget):
     maximize_clicked = Signal()
     settings_clicked = Signal()
     control_value_changed = Signal(str, str)  # name, new value
+    error_dismissed = Signal()
 
     def __init__(self):
         super().__init__()
@@ -66,6 +67,28 @@ class MiniRunToolbar(QWidget):
         button_row = QHBoxLayout()
         button_row.setSpacing(6)
         outer.addLayout(button_row)
+
+        # Hidden until a Code block errors out (which now also stops the run - see
+        # GraphRunner._execute_code) - this is the only surface still visible once
+        # that happens while minimized/backgrounded, so it has to carry the message
+        # itself rather than relying on the status bar or log dock.
+        self._error_container = QWidget()
+        error_layout = QHBoxLayout(self._error_container)
+        error_layout.setContentsMargins(0, 0, 0, 0)
+        error_layout.setSpacing(6)
+        self._error_label = QLabel()
+        self._error_label.setWordWrap(True)
+        self._error_label.setMaximumWidth(260)
+        self._error_label.setStyleSheet("color: #ff6b6b;")
+        error_layout.addWidget(self._error_label, stretch=1)
+        self._error_dismiss_btn = QPushButton("✕")
+        self._error_dismiss_btn.setToolTip("Dismiss")
+        self._error_dismiss_btn.setFixedWidth(24)
+        self._error_dismiss_btn.clicked.connect(self.clear_error)
+        self._error_dismiss_btn.clicked.connect(self.error_dismissed.emit)
+        error_layout.addWidget(self._error_dismiss_btn)
+        outer.addWidget(self._error_container)
+        self._error_container.setVisible(False)
 
         self._controls_container = QWidget()
         self._controls_layout = QVBoxLayout(self._controls_container)
@@ -115,6 +138,22 @@ class MiniRunToolbar(QWidget):
         else:
             self.play_pause_btn.setIcon(self._pause_icon)
             self.play_pause_btn.setToolTip("Pause")
+
+    def show_error(self, message: str) -> None:
+        """Shows just the first line inline (the toolbar is meant to stay small);
+        the full traceback is on the tooltip and already went to the log dock via
+        GraphRunner.status."""
+        first_line = next((line for line in message.strip().splitlines() if line), "Code block error")
+        self._error_label.setText(f"⚠ {first_line}")
+        self._error_label.setToolTip(message)
+        self._error_container.setVisible(True)
+        self.adjustSize()
+
+    def clear_error(self) -> None:
+        self._error_container.setVisible(False)
+        self._error_label.clear()
+        self._error_label.setToolTip("")
+        self.adjustSize()
 
     def set_controls(self, controls: List[dict]) -> None:
         """Rebuilds the dropdown rows from GraphRunner.controls_registered's payload

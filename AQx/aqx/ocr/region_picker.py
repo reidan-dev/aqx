@@ -1,16 +1,35 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Dict, Optional
 
 from PySide6.QtCore import QObject, QPoint, QRect, Qt, Signal
 from PySide6.QtGui import QColor, QPainter, QPen, QRegion
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QPushButton, QWidget
 from pynput import mouse
 
-from ..macos_window_fix import keep_panel_visible_across_app_switches
+from ..macos_window_fix import keep_panel_visible_across_app_switches, make_window_click_through
 
 BORDER = 3
 MIN_SIZE = 4
+HANDLE_SIZE = 8  # px, the drawn square
+HANDLE_HIT = 10  # px radius for grabbing a handle - screen coords, same space pynput reports in
+
+
+def _handle_points(rect: QRect) -> Dict[str, QPoint]:
+    """The 8 standard resize-handle positions for a rect: 4 corners + 4 edge
+    midpoints, named by compass direction. Used both for hit-testing against
+    global screen coords (RegionPicker) and for painting in widget-local coords
+    (_DrawFrame) - same shape either way, just a different rect passed in."""
+    return {
+        "nw": rect.topLeft(),
+        "n": QPoint(rect.center().x(), rect.top()),
+        "ne": rect.topRight(),
+        "w": QPoint(rect.left(), rect.center().y()),
+        "e": QPoint(rect.right(), rect.center().y()),
+        "sw": rect.bottomLeft(),
+        "s": QPoint(rect.center().x(), rect.bottom()),
+        "se": rect.bottomRight(),
+    }
 
 
 class _DrawFrame(QWidget):
@@ -18,7 +37,10 @@ class _DrawFrame(QWidget):
     normal widget, it never receives the drag itself - the actual gesture is driven
     by a global mouse listener (see RegionPicker) so the very first click can start
     anywhere on screen, including directly over another app's window, not just
-    within this widget's own bounds (which don't exist yet at that point)."""
+    within this widget's own bounds (which don't exist yet at that point). Same
+    reasoning extends to the resize handles: RegionPicker hit-tests them against raw
+    screen coords from that same global listener, not real Qt mouse events, so this
+    stays purely visual even while handles are shown."""
 
     def __init__(self):
         super().__init__()
@@ -26,14 +48,35 @@ class _DrawFrame(QWidget):
         # (doesn't reliably composite here) - same reasoning as the other overlays.
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setAttribute(Qt.WA_TransparentForMouseEvents)  # purely visual, never intercepts clicks
+        self._handles_visible = False
         self.hide()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        make_window_click_through(self)  # belt-and-suspenders - see make_window_click_through
+
+    def set_handles_visible(self, visible: bool) -> None:
+        self._handles_visible = visible
+        if self.isVisible():
+            self.show_rect(self.geometry())
 
     def show_rect(self, rect: QRect) -> None:
         self.setGeometry(rect)
         w, h = rect.width(), rect.height()
         outer = QRegion(0, 0, w, h)
         inner = QRegion(BORDER, BORDER, max(w - 2 * BORDER, 0), max(h - 2 * BORDER, 0))
-        self.setMask(outer.subtracted(inner))
+        mask = outer.subtracted(inner)
+        if self._handles_visible:
+            # The border ring alone (BORDER px wide) is too thin to paint the
+            # bigger handle squares in - punch each handle's own square into the
+            # mask too, clamped to the widget's own bounds (a handle right at the
+            # top-left corner would otherwise poke a few px outside x=0/y=0).
+            half = HANDLE_SIZE // 2
+            for point in _handle_points(QRect(0, 0, w, h)).values():
+                hx = max(0, min(point.x() - half, w - HANDLE_SIZE))
+                hy = max(0, min(point.y() - half, h - HANDLE_SIZE))
+                mask = mask.united(QRegion(hx, hy, HANDLE_SIZE, HANDLE_SIZE))
+        self.setMask(mask)
         if not self.isVisible():
             self.show()
         self.update()
@@ -43,6 +86,12 @@ class _DrawFrame(QWidget):
         painter.setPen(QPen(QColor("#4fa3ff"), BORDER))
         painter.setBrush(Qt.NoBrush)
         painter.drawRect(self.rect().adjusted(BORDER // 2, BORDER // 2, -BORDER // 2, -BORDER // 2))
+        if self._handles_visible:
+            painter.setPen(QPen(QColor("#1c3a5e"), 1))
+            painter.setBrush(QColor("#4fa3ff"))
+            half = HANDLE_SIZE // 2
+            for point in _handle_points(self.rect()).values():
+                painter.drawRect(point.x() - half, point.y() - half, HANDLE_SIZE, HANDLE_SIZE)
 
 
 class _MouseBridge(QObject):
@@ -153,7 +202,18 @@ class _Toolbar(QWidget):
 class RegionPicker(QObject):
     """A small toolbar the user positions and paces themselves: click Select Area
     when ready, drag anywhere on screen to draw the region - including directly over
-    another running app - then Redo, Cancel, or Accept before it's saved."""
+    another running app - then Redo, Cancel, or Accept before it's saved. Once a
+    rect exists (freshly drawn, or loaded via edit() for an already-saved region),
+    it's live-editable with 8 resize handles plus drag-to-move, right there over the
+    real screen, before you commit with Accept.
+
+    Internally this runs one of two "phases" on the same global mouse listener:
+    "drawing" is the original click-and-drag-anywhere gesture that produces the
+    first rect; "editing" starts once that rect exists and classifies each further
+    press against the rect's handles/interior (see _classify_edit_point) rather
+    than starting a new rect from scratch. Both phases share one listener/toolbar -
+    only Redo (back to "drawing") and Cancel/Accept (which close everything) ever
+    stop it."""
 
     region_selected = Signal(float, float, float, float)
     cancelled = Signal()
@@ -173,8 +233,17 @@ class RegionPicker(QObject):
         self._bridge.released.connect(self._on_released, Qt.QueuedConnection)
 
         self._listener: Optional[mouse.Listener] = None
-        self._start: Optional[QPoint] = None
+        self._phase = "drawing"  # or "editing" - see class docstring
+        self._start: Optional[QPoint] = None  # "drawing" phase: the drag's first corner
         self._result_rect: Optional[QRect] = None
+        # "editing" phase state: which handle (or "move") the current drag affects,
+        # the rect and press point captured at drag-start (so a resize/move is
+        # always computed from that fixed anchor, not accumulated deltas that would
+        # drift with each move event).
+        self._edit_rect: Optional[QRect] = None
+        self._edit_drag: Optional[str] = None
+        self._edit_anchor: Optional[QRect] = None
+        self._edit_press: Optional[QPoint] = None
 
     def start(self) -> None:
         self._toolbar.adjustSize()
@@ -183,10 +252,40 @@ class RegionPicker(QObject):
         self._toolbar.move(geo.center().x() - self._toolbar.width() // 2, geo.top() + 24)
         self._toolbar.show()
 
+    def edit(self, rect: QRect) -> None:
+        """Jumps straight into handle-editing an existing rect - no initial
+        drag-to-draw step. Used to adjust an already-saved OCR region in place,
+        live over the real screen, instead of redrawing it from scratch. The
+        toolbar is placed just above the rect (or below, if there's no room above)
+        so it starts near what's being edited rather than screen-center."""
+        self._toolbar.adjustSize()
+        tb = self._toolbar
+        x = rect.center().x() - tb.width() // 2
+        y = rect.top() - tb.height() - 12
+        if y < 0:
+            y = rect.bottom() + 12
+        tb.move(x, y)
+        tb.show()
+        self._enter_editing(rect)
+        self._listener = mouse.Listener(on_click=self._on_click, on_move=self._on_move)
+        self._listener.start()
+
     def _begin_selecting(self) -> None:
+        self._stop_listener()
+        self._phase = "drawing"
+        self._frame.set_handles_visible(False)
         self._toolbar.set_state("selecting")
         self._listener = mouse.Listener(on_click=self._on_click, on_move=self._on_move)
         self._listener.start()
+
+    def _enter_editing(self, rect: QRect) -> None:
+        self._phase = "editing"
+        self._edit_rect = QRect(rect)
+        self._result_rect = QRect(rect)
+        self._edit_drag = None
+        self._frame.set_handles_visible(True)
+        self._frame.show_rect(self._edit_rect)
+        self._toolbar.set_state("selected", f"{rect.width()} × {rect.height()}")
 
     def _redo(self) -> None:
         self._frame.hide()
@@ -215,13 +314,15 @@ class RegionPicker(QObject):
 
     # --- pynput thread ---
     def _on_click(self, x, y, button, pressed) -> Optional[bool]:
+        # Never stops the listener itself anymore (no `return False`) - both
+        # phases can involve more than one press/release (multiple handle drags
+        # in "editing"), so only an explicit Redo/Cancel/Accept ends the session.
         if button != mouse.Button.left:
             return None
         if pressed:
             self._bridge.pressed.emit(int(x), int(y))
         else:
             self._bridge.released.emit(int(x), int(y))
-            return False  # stop the listener - the gesture is complete
         return None
 
     def _on_move(self, x, y) -> None:
@@ -229,16 +330,33 @@ class RegionPicker(QObject):
 
     # --- Qt main thread ---
     def _on_pressed(self, x: int, y: int) -> None:
+        if self._phase == "editing":
+            self._edit_drag = self._classify_edit_point(x, y)
+            if self._edit_drag is not None:
+                self._edit_anchor = QRect(self._edit_rect)
+                self._edit_press = QPoint(x, y)
+            return
         self._start = QPoint(x, y)
         self._frame.show_rect(QRect(x, y, 1, 1))
 
     def _on_moved(self, x: int, y: int) -> None:
+        if self._phase == "editing":
+            if self._edit_drag is None:
+                return
+            self._edit_rect = self._apply_edit_drag(self._edit_drag, self._edit_anchor, self._edit_press, QPoint(x, y))
+            self._result_rect = self._edit_rect
+            self._frame.show_rect(self._edit_rect)
+            self._toolbar.set_state("selected", f"{self._edit_rect.width()} × {self._edit_rect.height()}")
+            return
         if self._start is None:
             return
         rect = QRect(self._start, QPoint(x, y)).normalized()
         self._frame.show_rect(rect)
 
     def _on_released(self, x: int, y: int) -> None:
+        if self._phase == "editing":
+            self._edit_drag = None
+            return
         start = self._start
         self._start = None
         if start is None:
@@ -248,5 +366,33 @@ class RegionPicker(QObject):
             self._frame.hide()
             self._toolbar.set_state("idle")
             return
-        self._result_rect = rect
-        self._toolbar.set_state("selected", f"{rect.width()} × {rect.height()}")
+        self._enter_editing(rect)
+
+    def _classify_edit_point(self, x: int, y: int) -> Optional[str]:
+        """What a press at (x, y) - global screen coords - should drag: one of the
+        8 handle names, "move" if inside the rect but not on a handle, or None if
+        it misses the rect entirely. A miss is left alone rather than treated as
+        "start a new rect" - pynput's global listener only taps the event, it
+        never consumes it, so the click still reaches whatever's actually
+        underneath."""
+        for name, point in _handle_points(self._edit_rect).items():
+            if abs(x - point.x()) <= HANDLE_HIT and abs(y - point.y()) <= HANDLE_HIT:
+                return name
+        if self._edit_rect.contains(QPoint(x, y)):
+            return "move"
+        return None
+
+    @staticmethod
+    def _apply_edit_drag(kind: str, anchor: QRect, press: QPoint, current: QPoint) -> QRect:
+        if kind == "move":
+            return anchor.translated(current.x() - press.x(), current.y() - press.y())
+        left, top, right, bottom = anchor.left(), anchor.top(), anchor.right(), anchor.bottom()
+        if "w" in kind:
+            left = min(current.x(), right - MIN_SIZE)
+        if "e" in kind:
+            right = max(current.x(), left + MIN_SIZE)
+        if "n" in kind:
+            top = min(current.y(), bottom - MIN_SIZE)
+        if "s" in kind:
+            bottom = max(current.y(), top + MIN_SIZE)
+        return QRect(QPoint(left, top), QPoint(right, bottom))

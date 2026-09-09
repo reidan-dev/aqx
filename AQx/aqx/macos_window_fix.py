@@ -68,3 +68,31 @@ def keep_panel_visible_across_app_switches(widget: QWidget) -> None:
             ns_window.orderFrontRegardless()
     except Exception:
         pass
+
+
+def make_window_click_through(widget: QWidget) -> None:
+    """Call after the widget has a native window (e.g. from showEvent) to make it
+    truly pass every click through to whatever's beneath it. Qt's own
+    WA_TransparentForMouseEvents attribute is set on these overlays already, but
+    for a frameless, no-Qt.Tool, always-on-top window it doesn't reliably stop the
+    window from being hit-tested on macOS - confirmed directly, a region-picker
+    frame with the attribute set was still eating clicks meant for the window
+    underneath it. Setting NSWindow.ignoresMouseEvents directly is what actually
+    works, same category of gap as keep_panel_visible_across_app_switches above.
+
+    Same no-ops as keep_panel_visible_across_app_switches: skipped outside macOS,
+    outside the "cocoa" platform plugin, or if PyObjC isn't usable."""
+    if sys.platform != "darwin":
+        return
+    app = QApplication.instance()
+    if app is not None and app.platformName() != "cocoa":
+        return
+    try:
+        import objc
+
+        ns_view = objc.objc_object(c_void_p=int(widget.winId()))
+        ns_window = ns_view.window()
+        if ns_window is not None:
+            ns_window.setIgnoresMouseEvents_(True)
+    except Exception:
+        pass

@@ -70,7 +70,7 @@ NODE_SPECS: Dict[str, dict] = {
         "label": "Record Block",
         "inputs": [Port("in", "exec")],
         "outputs": [Port("out", "exec")],
-        "default_props": {"recording": "", "repeat": 1},
+        "default_props": {"recording": "", "repeat": 1, "speed": 1.0},
     },
     "delay": {
         "label": "Delay",
@@ -154,7 +154,7 @@ NODE_SPECS: Dict[str, dict] = {
         "label": "Code",
         "inputs": [Port("in", "exec")],
         "outputs": [Port("out", "exec")],
-        "default_props": {"code": ""},
+        "default_props": {"setup_code": "", "functions_code": "", "code": "", "sync_vars": {}},
     },
     "controls": {
         "label": "Controls",
@@ -225,7 +225,7 @@ def is_spliceable(node_type: str) -> bool:
 
 HELP_TEXT: Dict[str, str] = {
     "start": "Where every run begins. Wire its \"out\" to whatever should happen first. Every flow needs exactly one.",
-    "recorded_block": "Plays back a mouse/keyboard recording you made earlier. Double-click to pick which recording and how many times to repeat it.",
+    "recorded_block": "Plays back a mouse/keyboard recording you made earlier. Double-click to pick which recording, how many times to repeat it, and its playback speed (1.0 = as recorded, 2.0 = twice as fast, 0.5 = half speed) - this scales the delays between events, not the recording itself.",
     "delay": "Pauses the flow for a fixed number of seconds before continuing to the next block.",
     "log": "Writes a message to the Execution Log - useful for marking progress or debugging a flow while you build it. Include $variable_name to insert a variable set earlier in the flow by a Set Variable block. Drag it directly onto an existing wire to tap into that point in the flow without disturbing what's already connected.",
     "telegram": "Sends a message via your Telegram bot (set the bot token and chat ID once in Settings > Preferences). Include $variable_name to insert a variable set earlier in the flow, same as Log. Optional \"Max sends\" caps how many times it actually sends even if reached more often (e.g. inside a loop); optional \"Wait before sending\" delays each send. A send failure is logged but doesn't stop the flow.",
@@ -238,9 +238,9 @@ HELP_TEXT: Dict[str, str] = {
     "connector": "A plain junction point - wire something into it, then wire its \"out\" to as many blocks as you like. All of them fire, in order, whenever it's reached. Purely for tidying up wire routing.",
     "logic": "Evaluates an AND/OR/NOT combination of OCR readings, variables, and other Logic blocks, and stores the result. Other blocks (If/While/Until/Exit Loop, or another Logic block) can then use \"Logic block\" as a condition source to reuse that result - this is how you compose logic out of smaller reusable pieces instead of one giant condition.",
     "loop_exit": "Checks a condition; if true, immediately exits its direct parent loop (the nearest enclosing For/While/Until) and continues from that loop's \"done\" port. If false, continues normally to \"out\". Placing it outside any loop is a no-op (logged as a warning).",
-    "code": "Runs Python code you write yourself. Read/write `variables` (the same dict Set Variable/If use), or call `ocr(\"region_name\")`, `play(\"recording_name\", repeat=1)`, `log(*values)`, `sleep(seconds)`, `telegram(message)`, `keystroke(keys, min_wait=0, max_wait=None)` (taps each key in a string/list, waiting after every tap - a fixed min_wait, or a random min_wait-max_wait gap when max_wait is given), and `stop_requested()`. Branch or loop inside the code with normal Python if/while - there's always a single \"out\" once the code finishes. An error is logged with its traceback but doesn't stop the flow.",
+    "code": "Runs Python code you write yourself, split into three panes sharing one namespace: setup() (runs once - the very first time this block is reached in the run, for initializing counters, one-time state, etc.), functions() (runs every time this block is reached - once per flow lap, same as the toolbar's Loops field, including the first - for declaring the helper functions you call from loop(), so they're not tangled up with your main logic), and loop() (runs every time too, right after functions()). Anything setup() or functions() declares is available in loop(); order each lap is always functions() then loop(). Read/write `variables` (the same dict Set Variable/If use), or call `ocr(\"region_name\")` (or `ocr_lines(\"region_name\")` for a region with several lines of text - returns a list, one entry per line, instead of one combined string), `play(\"recording_name\", repeat=1, speed=1.0)` (speed scales the delays between events - 2.0 plays twice as fast, 0.5 half speed), `log(*values)`, `sleep(seconds)`, `telegram(message)`, `keystroke(keys, min_wait=0, max_wait=None)` (taps each key in a string/list, waiting after every tap - a fixed min_wait, or a random min_wait-max_wait gap when max_wait is given), `sync(name)` / `save(name)` (checkpoints a plain variable's current value on this block, e.g. sync(x) right after changing x - once the flow is saved, that value automatically overwrites whatever setup() assigns to that same name at the start of every later Run, even after Stop, even after reopening AQx, so it starts from wherever it was left instead of setup()'s hardcoded default), and `stop_requested()`. Branch or loop inside any of the three with normal Python if/while - there's always a single \"out\" once loop() finishes. An error is logged with its traceback (shown near the floating toolbar if the window is minimized/backgrounded) and stops the whole run.",
     "controls": "Defines one or more named, multiple-choice values (e.g. \"battle-mode\" -> abc/def/fgh) that show up as dropdowns in the floating control while a flow runs, so you can change them mid-run without touching the graph. Every value here becomes a variable any If/While/Until/Logic condition or Code block can read, same as one set by Set Variable - registered the moment the run starts, regardless of whether this block is wired into the flow. Whatever you pick while running is written back here and saved with the flow, so the next run starts from your last choice.",
-    "skills": "The flow's one Skills block (only one is allowed) - each row watches an OCR region drawn over just a skill's cooldown number, and taps its Key the moment that region reads empty (off cooldown). Reaching this block in the flow checks and presses every row in it, in order. Each row is also identified by its position: row 1 publishes an \"s1_ready\" variable (True/False) any If/While/Until/Logic condition can read, row 2 an \"s2_ready\", and so on. A Code block calls skills() to get a handle exposing skills.s1, skills.s2, ... (one per row, in the same order) - .is_ready() just looks, .press() taps the key if it was ready, .wait_and_press() blocks on that one specific slot until it's off cooldown, and skills.press_ready([skills.s1, skills.s2]) does a priority scan - presses whichever's ready first, skipping ones still on cooldown rather than waiting on them. All of these work regardless of whether this block itself is wired into the flow.",
+    "skills": "The flow's one Skills block (only one is allowed) - each row watches an OCR region drawn over just a skill's cooldown number, and taps its Key the moment that region reads empty (off cooldown). Reaching this block in the flow checks and presses every row in it, in order. Each row is also identified by its position: row 1 publishes an \"s1_ready\" variable (True/False) any If/While/Until/Logic condition can read, row 2 an \"s2_ready\", and so on. A Code block calls skills() to get a handle exposing skills.s1, skills.s2, ... (one per row, in the same order) - .is_ready() just looks, .press() taps the key if it was ready, .wait_and_press() blocks on that one specific slot until it's off cooldown, .spam_press() presses it repeatedly (immediately, then every poll seconds) for as long as it stays off cooldown, stopping the instant it goes on cooldown, and skills.press_ready([skills.s1, skills.s2]) does a priority scan - presses whichever's ready first, skipping ones still on cooldown rather than waiting on them. All of these work regardless of whether this block itself is wired into the flow.",
     "turn_off": "Arms a timer that stops the whole run once a duration has passed since the run started - e.g. \"4h\" (4 hours), \"2m\" (2 minutes), \"3h30m\" (3 hours 30 minutes). Reaching this block doesn't pause anything - it continues to \"out\" immediately, and everything else in the flow keeps running exactly as normal until the timer fires and stops the run, the same as pressing Stop yourself. Place it once, anywhere reached early (e.g. right after Start) - reaching it again later doesn't restart or add to the timer.",
 }
 
@@ -275,7 +275,9 @@ def summary_for(node: Node) -> str:
         recording = node.props.get("recording") or "(none set)"
         repeat = node.props.get("repeat", 1)
         repeat_str = "×∞" if repeat == 0 else f"×{repeat}"
-        return _truncate(f"{recording} {repeat_str}")
+        speed = node.props.get("speed", 1.0)
+        speed_marker = f" @{speed}x" if speed != 1.0 else ""
+        return _truncate(f"{recording} {repeat_str}{speed_marker}")
     if node.type == "ocr":
         region = node.props.get("region") or "(none)"
         interval = node.props.get("interval_seconds", 5.0)

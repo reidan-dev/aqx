@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import sys
 from typing import Optional
 
 from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDialog,
     QDialogButtonBox,
+    QDoubleSpinBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -44,6 +47,9 @@ class SettingsDialog(QDialog):
         self.selected_emergency_key = settings.emergency_key
         self.selected_telegram_bot_token = settings.telegram_bot_token
         self.selected_telegram_chat_id = settings.telegram_chat_id
+        self.selected_mouse_guard_enabled = settings.mouse_guard_enabled
+        self.selected_mouse_guard_threshold = settings.mouse_guard_threshold
+        self.selected_mouse_guard_action = settings.mouse_guard_action
         self._listener: Optional[keyboard.Listener] = None
         self._global_stop_paused = False
         # Same reasoning as RecordBlockDialog: a pynput listener active anywhere in
@@ -103,6 +109,51 @@ class SettingsDialog(QDialog):
         telegram_hint.setWordWrap(True)
         telegram_hint.setStyleSheet("color:#9aa4b2; font-size:11px;")
         layout.addWidget(telegram_hint)
+
+        guard_divider = QFrame()
+        guard_divider.setFrameShape(QFrame.HLine)
+        guard_divider.setStyleSheet("color:#3a3d44;")
+        layout.addWidget(guard_divider)
+
+        self.mouse_guard_check = QCheckBox("React if I move the real mouse aggressively")
+        self.mouse_guard_check.setChecked(settings.mouse_guard_enabled)
+        layout.addWidget(self.mouse_guard_check)
+
+        guard_action_row = QHBoxLayout()
+        guard_action_row.addWidget(QLabel("When triggered:"))
+        self.mouse_guard_action_combo = QComboBox()
+        self.mouse_guard_action_combo.addItem("Stop the run", "stop")
+        self.mouse_guard_action_combo.addItem("Pause the run", "pause")
+        action_index = self.mouse_guard_action_combo.findData(settings.mouse_guard_action)
+        self.mouse_guard_action_combo.setCurrentIndex(action_index if action_index >= 0 else 0)
+        guard_action_row.addWidget(self.mouse_guard_action_combo)
+        layout.addLayout(guard_action_row)
+
+        guard_row = QHBoxLayout()
+        guard_row.addWidget(QLabel("Speed threshold:"))
+        self.mouse_guard_threshold_spin = QDoubleSpinBox()
+        self.mouse_guard_threshold_spin.setRange(100.0, 50_000.0)
+        self.mouse_guard_threshold_spin.setSingleStep(100.0)
+        self.mouse_guard_threshold_spin.setDecimals(0)
+        self.mouse_guard_threshold_spin.setSuffix(" px/sec")
+        self.mouse_guard_threshold_spin.setValue(settings.mouse_guard_threshold)
+        guard_row.addWidget(self.mouse_guard_threshold_spin)
+        layout.addLayout(guard_row)
+
+        guard_available = sys.platform == "darwin"
+        guard_hint = QLabel(
+            "Only counts your physical mouse - a flow's own Recorded Block/Code playback never "
+            "triggers this, no matter its speed. Lower = trips more easily. macOS only."
+            if guard_available
+            else "macOS only - unavailable on this platform."
+        )
+        guard_hint.setWordWrap(True)
+        guard_hint.setStyleSheet("color:#9aa4b2; font-size:11px;")
+        layout.addWidget(guard_hint)
+        if not guard_available:
+            self.mouse_guard_check.setEnabled(False)
+            self.mouse_guard_action_combo.setEnabled(False)
+            self.mouse_guard_threshold_spin.setEnabled(False)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self.accept)
@@ -176,4 +227,7 @@ class SettingsDialog(QDialog):
         self._resume_global_stop()
         self.selected_telegram_bot_token = self.token_edit.text().strip()
         self.selected_telegram_chat_id = self.chat_id_edit.text().strip()
+        self.selected_mouse_guard_enabled = self.mouse_guard_check.isChecked()
+        self.selected_mouse_guard_threshold = self.mouse_guard_threshold_spin.value()
+        self.selected_mouse_guard_action = self.mouse_guard_action_combo.currentData()
         super().accept()
