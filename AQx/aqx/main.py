@@ -5,7 +5,7 @@ import sys
 from PySide6.QtWidgets import QApplication
 
 from .config import Settings
-from .emergency import GlobalEmergencyStop, preflight_input_monitoring
+from .emergency import GlobalEmergencyStop, preflight_accessibility, preflight_input_monitoring
 from .graph.editor_window import GraphEditorWindow
 from .macos_keyboard_fix import patch_event_tap_auto_reenable, prime_macos_keyboard_listener
 from .recording.player import StopFlag
@@ -39,6 +39,18 @@ def main() -> None:
             "Security > Input Monitoring, enable it for this Python (or remove and re-add it if "
             "it's already listed but not working - a stale entry from a previous venv won't "
             "reactivate just by toggling it), then restart AQx."
+        )
+        print(f"AQx: {message}")
+        window.show_permission_warning(message)
+
+    accessibility_granted = preflight_accessibility()
+    if accessibility_granted is False:
+        message = (
+            f"Accessibility not granted to {sys.executable} - Recorded Block playback (moving "
+            "the mouse, pressing keys) will silently do nothing until this is fixed. Go to "
+            "System Settings > Privacy & Security > Accessibility, enable it for this Python "
+            "(or remove and re-add it if it's already listed but not working - a stale entry "
+            "from a previous venv won't reactivate just by toggling it), then restart AQx."
         )
         print(f"AQx: {message}")
         window.show_permission_warning(message)

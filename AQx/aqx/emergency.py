@@ -23,6 +23,26 @@ def preflight_input_monitoring() -> Optional[bool]:
         return None
 
 
+def preflight_accessibility() -> Optional[bool]:
+    """Checks whether Accessibility is currently granted, without prompting.
+    This is the *other*, separate macOS permission from Input Monitoring above:
+    Input Monitoring lets pynput's Listener *observe* events; Accessibility lets
+    pynput's mouse.Controller/keyboard.Controller *inject* them, which is what every
+    Recorded Block playback does. Same silent-failure shape as Input Monitoring -
+    Controller.press()/.release()/.position setters don't raise when this is
+    missing, the injected events are just dropped by the OS - so a flow "runs" to
+    completion with nothing visibly happening. Returns None (treat as "unknown") on
+    non-macOS or if the check itself isn't available."""
+    if sys.platform != "darwin":
+        return None
+    try:
+        import ApplicationServices
+
+        return bool(ApplicationServices.AXIsProcessTrusted())
+    except Exception:
+        return None
+
+
 class GlobalEmergencyStop:
     """Watches for the global hotkey for the lifetime of the app and calls
     on_trigger() each time it's pressed. Never consumes or blocks the keystroke.
